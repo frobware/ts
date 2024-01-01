@@ -1,0 +1,28 @@
+# Compile database
+compile_commands.json
+
+# Object files and static libraries
+*.o
+*.a
+*.la
+*.lo
+
+# Executable and shared libraries
+*.exe
+*.dll
+*.so
+*.dylib
+
+# Editor files and configs
+.vscode/
+.idea/
+*.swp
+*.swo
+*~
+
+/.direnv/
+/.cache/
+/build/
+/result
+/pgo-results.md
+/.clangd

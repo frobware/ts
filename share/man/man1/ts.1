@@ -1,0 +1,80 @@
+.TH TS 1 "@DATE@" "@VERSION@" "ts utility man page"
+.SH NAME
+ts \- timestamp input
+
+.SH SYNOPSIS
+.B ts
+[\-r] [\-i | \-s] [\-m] [format]
+
+.SH DESCRIPTION
+The
+.B ts
+utility adds a timestamp to the beginning of each line of input.
+
+The optional
+.I format
+parameter controls how the timestamp is formatted, as used by
+.BR strftime(3) .
+The default format is "%b %d %H:%M:%S". In addition to the regular
+strftime conversion specifications, "%.S" and "%.s" and "%.T" are like
+"%S" and "%s" and "%T", but provide subsecond resolution (e.g.,
+"30.00001" and "1301682593.00001" and "1:15:30.00001").
+
+If the
+.B \-r
+switch is passed, it instead converts existing timestamps in the input
+to relative times, such as "15m5s ago". Many common timestamp formats
+are supported.
+
+If both
+.B \-r
+and a format is passed, the existing timestamps are converted to the
+specified format.
+
+If the
+.B \-i
+or
+.B \-s
+switch is passed, ts reports incremental timestamps instead of
+absolute ones. The default format changes to "%H:%M:%S", and "%.S" and
+"%.s" can be used as well. With
+.B \-i,
+every timestamp will be the time elapsed since the last timestamp.
+With
+.B \-s,
+the time elapsed since the start of the program is used.
+
+The
+.B \-m
+switch makes the system's monotonic clock be used.
+
+.SH OPTIONS
+.TP
+.B \-r
+Convert existing timestamps in the input to relative times.
+
+.TP
+.B \-i
+Report incremental timestamps, time elapsed since the last timestamp.
+
+.TP
+.B \-s
+Report incremental timestamps, time elapsed since start of the program.
+
+.TP
+.B \-m
+Use the system's monotonic clock for timestamps.
+
+.SH ENVIRONMENT
+The standard
+.B TZ
+environment variable controls what time zone dates are assumed to be
+in if a timezone is not specified as part of the date.
+
+.SH AUTHOR
+Copyright 2006 by Joey Hess <id@joeyh.name>
+
+Licensed under the GNU GPL.
+
+.SH "SEE ALSO"
+.BR strftime(3)
