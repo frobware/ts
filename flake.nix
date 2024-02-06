@@ -27,10 +27,9 @@
           self.packages.${system}.default.buildInputs
         ];
         nativeBuildInputs = [
-          pkgs.clang
           pkgs.hyperfine
           pkgs.include-what-you-use
-          pkgs.lldb
+          pkgs.pkg-config
         ]
         ++ pkgs.lib.optional (!pkgs.stdenv.hostPlatform.isDarwin) pkgs.gdb
         ++ pkgs.lib.optional (!pkgs.stdenv.hostPlatform.isDarwin) pkgs.ltrace
@@ -71,6 +70,8 @@
             # I simply have more joy debugging with /usr/bin/clang and
             # /usr/bin/lldb on macOS.
             export CC=/usr/bin/clang
+            export EXTRA_CFLAGS="''$(pkg-config --cflags libpcre)"
+            export EXTRA_LDFLAGS="''$(pkg-config --libs-only-L libpcre)"
           ''}
         '';
       };
