@@ -1,6 +1,6 @@
 /* -*- mode: c; c-file-style: "linux"; -*- */
 
-// Copyright (C) 2023, Andrew McDermott. All rights reserved.
+// Copyright (C) 2023, 2024, Andrew McDermott. All rights reserved.
 
 // This file is part of the https://github.com/frobware/ts project.
 // For the full copyright and license information, please view the
@@ -102,9 +102,10 @@ struct ts_opt {
 	bool flag_mono;
 	bool flag_rel;
 	bool flag_sincestart;
-	const char *format;
 	bool hires_timestamping;
 	bool user_format_specified;
+	const char *format;
+	int flag_precision;
 };
 
 struct timestamp_pattern {
@@ -129,14 +130,6 @@ static struct timestamp_pattern timestamps[] = {{
 		.description = "16 Jun 94 07:29:35 with timezone",
 		.strptime_format = "%d %b %y %H:%M:%S %z",
 	}, {
-		.re = "\\w\\w\\w\\s+\\w\\w\\w\\s+\\d\\d\\s+\\d\\d:\\d\\d",
-		.description = "Lastlog format",
-		.strptime_format = "%a %b %d %H:%M",
-	}, {
-		.re = "\\d\\d\\d\\d[-:]\\d\\d[-:]\\d\\dT\\d\\d:\\d\\d:\\d\\d",
-		.description = "ISO-8601 format",
-		.strptime_format = "%Y-%m-%dT%H:%M:%S",
-	}, {
 		.re = "\\d\\d[-\\s\\/]\\w\\w\\w\\/\\d\\d+\\s+\\d\\d:\\d\\d:\\d\\d\\s+[+-]\\d\\d\\d\\d",
 		.description = "21 dec/93 17:05:30 +0000",
 		.strptime_format = "%d %b/%y %H:%M:%S %z",
@@ -152,6 +145,14 @@ static struct timestamp_pattern timestamps[] = {{
 		.re = "\\d\\d[-\\s\\/]\\w\\w\\w\\s+\\d\\d:\\d\\d",
 		.description = "21 dec 17:05 without seconds and timezone",
 		.strptime_format = "%d %b %H:%M",
+	}, {
+		.re = "\\d\\d\\d\\d[-:]\\d\\d[-:]\\d\\dT\\d\\d:\\d\\d:\\d\\d",
+		.description = "ISO-8601 format",
+		.strptime_format = "%Y-%m-%dT%H:%M:%S",
+	}, {
+		.re = "\\w\\w\\w\\s+\\w\\w\\w\\s+\\d\\d\\s+\\d\\d:\\d\\d",
+		.description = "Lastlog format",
+		.strptime_format = "%a %b %d %H:%M",
 	}, {
 		.re = "\\w{3}\\s+\\d{1,2}\\s+\\d\\d:\\d\\d:\\d\\d",
 		.description = "Syslog format with day",
@@ -620,7 +621,7 @@ static void fmt_time_rel(struct ts_fmt *fmt, char *line, ssize_t line_len, size_
 		composite_time comp_time;
 
 		seconds_to_composite_time(labs(seconds_diff), comp_time);
-		approximate_time(2, comp_time);
+		approximate_time(fmt->opt->flag_precision, comp_time);
 		format_comp_time(fmt->buf,
 				 comp_time,
 				 seconds_diff >= 0 ? " ago" : " from now",
@@ -691,7 +692,12 @@ static struct ts_opt parse_options(int argc, char *argv[])
 	struct ts_opt option = { 0 };
 
 	int opt;
-	while ((opt = getopt(argc, argv, "imrs")) != -1) {
+	char *value_endptr;
+	long value;
+
+	option.flag_precision = 2; /* default */
+
+	while ((opt = getopt(argc, argv, "imrsp:")) != -1) {
 		switch (opt) {
 		case 'i':
 			option.flag_inc = true;
@@ -705,8 +711,21 @@ static struct ts_opt parse_options(int argc, char *argv[])
 		case 's':
 			option.flag_sincestart = true;
 			break;
+		case 'p':
+			value = strtol(optarg, &value_endptr, 10);
+			if ((errno == ERANGE && (value == LONG_MAX || value == LONG_MIN)) || (errno != 0 && value == 0)) {
+				fprintf(stderr, "Error: Precision value %ld out of range: %s.\n", value, strerror(errno));
+				exit(EXIT_FAILURE);
+			}
+			if (value_endptr == optarg || *value_endptr != '\0' ||
+			    value < 0 || value > TIME_UNIT_COUNT) {
+				fprintf(stderr, "Error: Precision value '%ld' is out of bounds. Valid values are between 0 and %d inclusive.\n", value, TIME_UNIT_COUNT);
+				exit(EXIT_FAILURE);
+			}
+			option.flag_precision = value;
+			break;
 		default:
-			fprintf(stderr, "Usage: ts [-r] [-i | -s] [-m] [format]\n");
+			fprintf(stderr, "Usage: ts [-r] [-i | -s] [-m] [-p precision] [format]\n");
 			exit(EXIT_FAILURE);
 		}
 	}
@@ -852,6 +871,18 @@ static void test_precision_variations(void)
 	seconds_to_composite_time(timestamp, comp_time);
 	approximate_time(0, comp_time);
 	COMP_TIME_ASSERT(comp_time, 0, 0, 0, 0, 0);
+
+	COMP_TIME_INIT(comp_time, 0, 0, 23, 45, 0);
+	timestamp = composite_time_to_seconds(comp_time);
+	seconds_to_composite_time(timestamp, comp_time);
+	approximate_time(1, comp_time);
+	COMP_TIME_ASSERT(comp_time, 0, 1, 0, 0, 0);
+
+	COMP_TIME_INIT(comp_time, 1, 364, 0, 0, 0);
+	timestamp = composite_time_to_seconds(comp_time);
+	seconds_to_composite_time(timestamp, comp_time);
+	approximate_time(1, comp_time);
+	COMP_TIME_ASSERT(comp_time, 2, 0, 0, 0, 0);
 }
 
 static volatile sig_atomic_t signal_received;
