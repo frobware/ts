@@ -1,6 +1,6 @@
 /* -*- mode: c; c-file-style: "linux"; -*- */
 
-// Copyright (C) 2023, Andrew McDermott. All rights reserved.
+// Copyright (C) 2023, 2024, Andrew McDermott. All rights reserved.
 
 // This file is part of the https://github.com/frobware/ts project.
 // For the full copyright and license information, please view the
@@ -102,9 +102,10 @@ struct ts_opt {
 	bool flag_mono;
 	bool flag_rel;
 	bool flag_sincestart;
-	const char *format;
 	bool hires_timestamping;
 	bool user_format_specified;
+	const char *format;
+	int flag_precision;
 };
 
 struct timestamp_pattern {
@@ -129,14 +130,6 @@ static struct timestamp_pattern timestamps[] = {{
 		.description = "16 Jun 94 07:29:35 with timezone",
 		.strptime_format = "%d %b %y %H:%M:%S %z",
 	}, {
-		.re = "\\w\\w\\w\\s+\\w\\w\\w\\s+\\d\\d\\s+\\d\\d:\\d\\d",
-		.description = "Lastlog format",
-		.strptime_format = "%a %b %d %H:%M",
-	}, {
-		.re = "\\d\\d\\d\\d[-:]\\d\\d[-:]\\d\\dT\\d\\d:\\d\\d:\\d\\d",
-		.description = "ISO-8601 format",
-		.strptime_format = "%Y-%m-%dT%H:%M:%S",
-	}, {
 		.re = "\\d\\d[-\\s\\/]\\w\\w\\w\\/\\d\\d+\\s+\\d\\d:\\d\\d:\\d\\d\\s+[+-]\\d\\d\\d\\d",
 		.description = "21 dec/93 17:05:30 +0000",
 		.strptime_format = "%d %b/%y %H:%M:%S %z",
@@ -152,6 +145,14 @@ static struct timestamp_pattern timestamps[] = {{
 		.re = "\\d\\d[-\\s\\/]\\w\\w\\w\\s+\\d\\d:\\d\\d",
 		.description = "21 dec 17:05 without seconds and timezone",
 		.strptime_format = "%d %b %H:%M",
+	}, {
+		.re = "\\d\\d\\d\\d[-:]\\d\\d[-:]\\d\\dT\\d\\d:\\d\\d:\\d\\d",
+		.description = "ISO-8601 format",
+		.strptime_format = "%Y-%m-%dT%H:%M:%S",
+	}, {
+		.re = "\\w\\w\\w\\s+\\w\\w\\w\\s+\\d\\d\\s+\\d\\d:\\d\\d",
+		.description = "Lastlog format",
+		.strptime_format = "%a %b %d %H:%M",
 	}, {
 		.re = "\\w{3}\\s+\\d{1,2}\\s+\\d\\d:\\d\\d:\\d\\d",
 		.description = "Syslog format with day",
@@ -620,7 +621,7 @@ static void fmt_time_rel(struct ts_fmt *fmt, char *line, ssize_t line_len, size_
 		composite_time comp_time;
 
 		seconds_to_composite_time(labs(seconds_diff), comp_time);
-		approximate_time(2, comp_time);
+		approximate_time(fmt->opt->flag_precision, comp_time);
 		format_comp_time(fmt->buf,
 				 comp_time,
 				 seconds_diff >= 0 ? " ago" : " from now",
@@ -691,7 +692,12 @@ static struct ts_opt parse_options(int argc, char *argv[])
 	struct ts_opt option = { 0 };
 
 	int opt;
-	while ((opt = getopt(argc, argv, "imrs")) != -1) {
+	char *value_endptr;
+	long value;
+
+	option.flag_precision = 2; /* default */
+
+	while ((opt = getopt(argc, argv, "imrsp:")) != -1) {
 		switch (opt) {
 		case 'i':
 			option.flag_inc = true;
@@ -705,8 +711,21 @@ static struct ts_opt parse_options(int argc, char *argv[])
 		case 's':
 			option.flag_sincestart = true;
 			break;
+		case 'p':
+			value = strtol(optarg, &value_endptr, 10);
+			if ((errno == ERANGE && (value == LONG_MAX || value == LONG_MIN)) || (errno != 0 && value == 0)) {
+				fprintf(stderr, "Error: -p %ld: %s.\n", value, strerror(errno));
+				exit(EXIT_FAILURE);
+			}
+			if (value_endptr == optarg || *value_endptr != '\0' ||
+			    value < 1 || value >= TIME_UNIT_COUNT) {
+				fprintf(stderr, "Error: -p %ld is out of range. Valid values are between 1 and %d inclusive.\n", value, TIME_UNIT_COUNT-1);
+				exit(EXIT_FAILURE);
+			}
+			option.flag_precision = value;
+			break;
 		default:
-			fprintf(stderr, "Usage: ts [-r] [-i | -s] [-m] [format]\n");
+			fprintf(stderr, "Usage: ts [-r] [-i | -s] [-m] [-p precision] [format]\n");
 			exit(EXIT_FAILURE);
 		}
 	}
@@ -716,6 +735,13 @@ static struct ts_opt parse_options(int argc, char *argv[])
 		exit(EXIT_FAILURE);
 	}
 
+	/*
+	 * %b = Abbreviated month name
+	 * %d = The day of the month as a decimal number
+	 * %H = Hours
+	 % %M = Minutes
+	 % %S = Seconds
+	 */
 	const char *final_format = "%b %d %H:%M:%S";
 
 	if (optind < argc) {
@@ -738,7 +764,49 @@ static void test_precision_variations(void)
 	composite_time comp_time;
 	time_t timestamp;
 
-	// Test with precision 1.
+	// Test rounding up with precision level 3; hours increase due
+	// to minutes and seconds.
+	COMP_TIME_INIT(comp_time, 1, 2, 3, 45, 59);
+	timestamp = composite_time_to_seconds(comp_time);
+	seconds_to_composite_time(timestamp, comp_time);
+	approximate_time(3, comp_time);
+	COMP_TIME_ASSERT(comp_time, 1, 2, 4, 0, 0);
+
+	// Test detailed representation with precision level 4;
+	// minutes increase due to seconds.
+	COMP_TIME_INIT(comp_time, 1, 2, 3, 45, 59);
+	timestamp = composite_time_to_seconds(comp_time);
+	seconds_to_composite_time(timestamp, comp_time);
+	approximate_time(4, comp_time);
+	COMP_TIME_ASSERT(comp_time, 1, 2, 3, 46, 0);
+
+	// Test with 59 minutes, 59 seconds at precision level 4;
+	// expecting no change since all units are significant.
+	COMP_TIME_INIT(comp_time, 0, 0, 0, 59, 59);
+	timestamp = composite_time_to_seconds(comp_time);
+	seconds_to_composite_time(timestamp, comp_time);
+	approximate_time(4, comp_time);
+	COMP_TIME_ASSERT(comp_time, 0, 0, 0, 59, 59);
+
+	// Test with 1 hour, 59 minutes, 59 seconds at precision level
+	// 3; expecting no change as rounding not applied due to
+	// precision.
+	COMP_TIME_INIT(comp_time, 0, 0, 1, 59, 59);
+	timestamp = composite_time_to_seconds(comp_time);
+	seconds_to_composite_time(timestamp, comp_time);
+	approximate_time(3, comp_time);
+	COMP_TIME_ASSERT(comp_time, 0, 0, 1, 59, 59);
+
+	// Test rounding up from minutes to hours with precision level
+	// 2; hours should increase, minutes reset.
+	COMP_TIME_INIT(comp_time, 0, 0, 1, 59, 59);
+	timestamp = composite_time_to_seconds(comp_time);
+	seconds_to_composite_time(timestamp, comp_time);
+	approximate_time(2, comp_time);
+	COMP_TIME_ASSERT(comp_time, 0, 0, 2, 0, 0);
+
+	// Simplify to most significant unit (days) with precision
+	// level 1 from days, hours, and minutes.
 	COMP_TIME_INIT(comp_time, 0, 1, 2, 28, 30);
 	timestamp = composite_time_to_seconds(comp_time);
 	assert(timestamp == 95310);
@@ -746,7 +814,8 @@ static void test_precision_variations(void)
 	approximate_time(1, comp_time);
 	COMP_TIME_ASSERT(comp_time, 0, 1, 0, 0, 0);
 
-	// Test with precision 2.
+	// Retain days and hours with precision level 2, simplifying
+	// minutes and seconds.
 	COMP_TIME_INIT(comp_time, 0, 1, 2, 28, 30);
 	timestamp = composite_time_to_seconds(comp_time);
 	assert(timestamp == 95310);
@@ -754,7 +823,8 @@ static void test_precision_variations(void)
 	approximate_time(2, comp_time);
 	COMP_TIME_ASSERT(comp_time, 0, 1, 2, 0, 0);
 
-	// Test with precision 3.
+	// Retain days, hours, and approximate minutes with precision
+	// level 3.
 	COMP_TIME_INIT(comp_time, 0, 1, 2, 28, 30);
 	timestamp = composite_time_to_seconds(comp_time);
 	assert(timestamp == 95310);
@@ -762,7 +832,8 @@ static void test_precision_variations(void)
 	approximate_time(3, comp_time);
 	COMP_TIME_ASSERT(comp_time, 0, 1, 2, 29, 0);
 
-	// Test with precision 4.
+	// Full detail maintained with precision level 4, no
+	// approximation.
 	COMP_TIME_INIT(comp_time, 0, 1, 2, 28, 30);
 	timestamp = composite_time_to_seconds(comp_time);
 	assert(timestamp == 95310);
@@ -770,88 +841,135 @@ static void test_precision_variations(void)
 	approximate_time(4, comp_time);
 	COMP_TIME_ASSERT(comp_time, 0, 1, 2, 28, 30);
 
-	// Test with precision 5.
-	COMP_TIME_INIT(comp_time, 0, 1, 2, 28, 30);
+	// Test high precision with minimal input (1 second), expecting no approximation.
+	COMP_TIME_INIT(comp_time, 0, 0, 0, 0, 1);
 	timestamp = composite_time_to_seconds(comp_time);
-	assert(timestamp == 95310);
 	seconds_to_composite_time(timestamp, comp_time);
-	approximate_time(5, comp_time);
-	COMP_TIME_ASSERT(comp_time, 0, 1, 2, 28, 30);
+	approximate_time(4, comp_time);
+	COMP_TIME_ASSERT(comp_time, 0, 0, 0, 0, 1);
 
-	// Test rollover from minutes to hours.
+	// Test for minute to hour rollover with precision level 2.
 	COMP_TIME_INIT(comp_time, 0, 0, 1, 59, 30);
 	timestamp = composite_time_to_seconds(comp_time);
 	seconds_to_composite_time(timestamp, comp_time);
 	approximate_time(2, comp_time);
 	COMP_TIME_ASSERT(comp_time, 0, 0, 2, 0, 0);
 
-	// Test rollover from hours to days.
+	// Test for no change with hours near maximum but within
+	// precision level 2.
 	COMP_TIME_INIT(comp_time, 0, 0, 23, 45, 0);
 	timestamp = composite_time_to_seconds(comp_time);
 	seconds_to_composite_time(timestamp, comp_time);
 	approximate_time(2, comp_time);
 	COMP_TIME_ASSERT(comp_time, 0, 0, 23, 45, 0);
 
-	// Test rollover from days to years.
+	// Test day to year rollover with precision level 2; days
+	// reset, year increments.
 	COMP_TIME_INIT(comp_time, 1, 364, 23, 59, 59);
 	timestamp = composite_time_to_seconds(comp_time);
 	seconds_to_composite_time(timestamp, comp_time);
 	approximate_time(2, comp_time);
 	COMP_TIME_ASSERT(comp_time, 2, 0, 0, 0, 0);
 
-	// Test case where nonzero-units exceeds precision.
+	// Test handling when non-zero units exceed precision level 2;
+	// hours and less significant units reset.
 	COMP_TIME_INIT(comp_time, 0, 0, 23, 59, 59);
 	timestamp = composite_time_to_seconds(comp_time);
 	seconds_to_composite_time(timestamp, comp_time);
 	approximate_time(2, comp_time);
-	// Expecting rollover from hours to days.
 	COMP_TIME_ASSERT(comp_time, 0, 1, 0, 0, 0);
 
-	// Test with minimal non-zero values (1 second).
-	COMP_TIME_INIT(comp_time, 0, 0, 0, 0, 1);
-	timestamp = composite_time_to_seconds(comp_time);
-	seconds_to_composite_time(timestamp, comp_time);
-	approximate_time(1, comp_time);
-	// Expecting no change.
-	COMP_TIME_ASSERT(comp_time, 0, 0, 0, 0, 1);
-
-	// Test with maximum values just before rollover (59 seconds,
-	// 59 minutes, 23 hours, 364 days).
-	COMP_TIME_INIT(comp_time, 0, 364, 23, 59, 59);
-	timestamp = composite_time_to_seconds(comp_time);
-	seconds_to_composite_time(timestamp, comp_time);
-	approximate_time(4, comp_time);
-	// Expecting no change with precision 4.
-	COMP_TIME_ASSERT(comp_time, 0, 364, 23, 59, 59);
-
-	// Test with all units set to zero.
+	// Test handling when all units are set to zero, with precision level 2.
 	COMP_TIME_INIT(comp_time, 0, 0, 0, 0, 0);
 	timestamp = composite_time_to_seconds(comp_time);
 	seconds_to_composite_time(timestamp, comp_time);
 	approximate_time(2, comp_time);
-	// Expecting no change
 	COMP_TIME_ASSERT(comp_time, 0, 0, 0, 0, 0);
 
-	// Test with only one unit non-zero (1 hour).
-	COMP_TIME_INIT(comp_time, 0, 0, 1, 0, 0);
+	// Test edge case for seconds rolling over to minutes, with
+	// precision level 2.
+	COMP_TIME_INIT(comp_time, 0, 0, 0, 59, 59);
+	timestamp = composite_time_to_seconds(comp_time);
+	seconds_to_composite_time(timestamp, comp_time);
+	approximate_time(2, comp_time);
+	COMP_TIME_ASSERT(comp_time, 0, 0, 0, 59, 59);
+
+	// Test high precision with minimal input (1 second), expecting no approximation.
+	COMP_TIME_INIT(comp_time, 0, 0, 0, 0, 1);
+	timestamp = composite_time_to_seconds(comp_time);
+	seconds_to_composite_time(timestamp, comp_time);
+	approximate_time(4, comp_time);
+	COMP_TIME_ASSERT(comp_time, 0, 0, 0, 0, 1);
+
+	// Test rollover across multiple units (seconds to minutes to
+	// hours), with precision level 3.
+	COMP_TIME_INIT(comp_time, 0, 0, 23, 59, 59);
+	timestamp = composite_time_to_seconds(comp_time);
+	seconds_to_composite_time(timestamp, comp_time);
+	approximate_time(3, comp_time);
+	COMP_TIME_ASSERT(comp_time, 0, 0, 23, 59, 59);
+
+	// Test mixed zero and non-zero units, with precision level 2.
+	COMP_TIME_INIT(comp_time, 1, 0, 1, 0, 1);
+	timestamp = composite_time_to_seconds(comp_time);
+	seconds_to_composite_time(timestamp, comp_time);
+	approximate_time(2, comp_time);
+	COMP_TIME_ASSERT(comp_time, 1, 0, 1, 0, 0);
+
+	// Test days to years rollover with minimal hours input, with
+	// precision level 2.
+	COMP_TIME_INIT(comp_time, 0, 364, 23, 0, 0);
+	timestamp = composite_time_to_seconds(comp_time);
+	seconds_to_composite_time(timestamp, comp_time);
+	approximate_time(2, comp_time);
+	COMP_TIME_ASSERT(comp_time, 0, 364, 23, 0, 0);
+
+	// Test with maximum values just before rollover for each
+	// unit, with precision level 4. Expecting no change with
+	// precision 4, as all units are significant.
+	COMP_TIME_INIT(comp_time, 0, 364, 23, 59, 59);
+	timestamp = composite_time_to_seconds(comp_time);
+	seconds_to_composite_time(timestamp, comp_time);
+	approximate_time(4, comp_time);
+
+	COMP_TIME_ASSERT(comp_time, 0, 364, 23, 59, 59);
+
+	// Test handling of cascading rollover from minutes to hours
+	// to days, with precision level 2.
+	COMP_TIME_INIT(comp_time, 0, 0, 23, 59, 30);
+	timestamp = composite_time_to_seconds(comp_time);
+	seconds_to_composite_time(timestamp, comp_time);
+	approximate_time(2, comp_time);
+        COMP_TIME_ASSERT(comp_time, 0, 1, 0, 0, 0);
+
+	// Test transition at midnight with precision level 3.
+	COMP_TIME_INIT(comp_time, 0, 0, 23, 59, 60);
+	timestamp = composite_time_to_seconds(comp_time);
+	seconds_to_composite_time(timestamp, comp_time);
+	approximate_time(3, comp_time);
+        COMP_TIME_ASSERT(comp_time, 0, 1, 0, 0, 0);
+
+	// Test with minimal non-zero units and lower precision.
+	COMP_TIME_INIT(comp_time, 0, 0, 0, 1, 30);
 	timestamp = composite_time_to_seconds(comp_time);
 	seconds_to_composite_time(timestamp, comp_time);
 	approximate_time(1, comp_time);
-	COMP_TIME_ASSERT(comp_time, 0, 0, 1, 0, 0);
+        COMP_TIME_ASSERT(comp_time, 0, 0, 0, 2, 0);
 
-	// Test with maximum precision.
-	COMP_TIME_INIT(comp_time, 1, 2, 3, 4, 5);
+	// Test sparse non-zero units with high precision.
+	COMP_TIME_INIT(comp_time, 1, 0, 0, 0, 5);
 	timestamp = composite_time_to_seconds(comp_time);
 	seconds_to_composite_time(timestamp, comp_time);
-	approximate_time(5, comp_time);
-	COMP_TIME_ASSERT(comp_time, 1, 2, 3, 4, 5);
+	approximate_time(4, comp_time);
+        COMP_TIME_ASSERT(comp_time, 1, 0, 0, 0, 5);
 
-	// Test with precision 0.
-	COMP_TIME_INIT(comp_time, 0, 1, 2, 3, 4);
+	// Test rounding in the middle of the spectrum with precision
+	// 3. Assuming no change as it's already concise.
+	COMP_TIME_INIT(comp_time, 0, 0, 12, 30, 0);
 	timestamp = composite_time_to_seconds(comp_time);
 	seconds_to_composite_time(timestamp, comp_time);
-	approximate_time(0, comp_time);
-	COMP_TIME_ASSERT(comp_time, 0, 0, 0, 0, 0);
+	approximate_time(3, comp_time);
+	COMP_TIME_ASSERT(comp_time, 0, 0, 12, 30, 0);
 }
 
 static volatile sig_atomic_t signal_received;
