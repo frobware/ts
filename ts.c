@@ -117,9 +117,25 @@ struct timestamp_pattern {
 typedef time_t composite_time[TIME_UNIT_COUNT];
 
 static struct timestamp_pattern timestamps[] = {{
-		.re = "\\w{3}\\s+\\d{1,2}\\s+\\d\\d:\\d\\d:\\d\\d",
-		.description = "Syslog format with day",
-		.strptime_format = "%b %d %H:%M:%S",
+		.re = "\\d{4}-\\d{2}-\\d{2}T\\d{2}:\\d{2}:\\d{2}\\.\\d{9}Z",
+		.description = "Kubernetes pod log entry with timestamp",
+		.strptime_format = "%Y-%m-%dT%H:%M:%S",
+	}, {
+		.re = "\\d{4} \\d{2}:\\d{2}:\\d{2}\\.\\d{6}",
+		.description = "Kubernetes client-go log format with microseconds",
+		.strptime_format = "%m%d %H:%M:%S",
+	}, {
+		.re = "\\d+\\s+\\w\\w\\w\\s+\\d\\d+\\s+\\d\\d:\\d\\d:\\d\\d\\s+[+-]\\d\\d\\d\\d",
+		.description = "16 Jun 94 07:29:35 with timezone",
+		.strptime_format = "%d %b %y %H:%M:%S %z",
+	}, {
+		.re = "\\w\\w\\w\\s+\\w\\w\\w\\s+\\d\\d\\s+\\d\\d:\\d\\d",
+		.description = "Lastlog format",
+		.strptime_format = "%a %b %d %H:%M",
+	}, {
+		.re = "\\d\\d\\d\\d[-:]\\d\\d[-:]\\d\\dT\\d\\d:\\d\\d:\\d\\d",
+		.description = "ISO-8601 format",
+		.strptime_format = "%Y-%m-%dT%H:%M:%S",
 	}, {
 		.re = "\\d\\d[-\\s\\/]\\w\\w\\w\\/\\d\\d+\\s+\\d\\d:\\d\\d:\\d\\d\\s+[+-]\\d\\d\\d\\d",
 		.description = "21 dec/93 17:05:30 +0000",
@@ -137,21 +153,9 @@ static struct timestamp_pattern timestamps[] = {{
 		.description = "21 dec 17:05 without seconds and timezone",
 		.strptime_format = "%d %b %H:%M",
 	}, {
-		.re = "\\d\\d\\d\\d[-:]\\d\\d[-:]\\d\\dT\\d\\d:\\d\\d:\\d\\d",
-		.description = "ISO-8601 format",
-		.strptime_format = "%Y-%m-%dT%H:%M:%S",
-	}, {
-		.re = "\\w\\w\\w\\s+\\w\\w\\w\\s+\\d\\d\\s+\\d\\d:\\d\\d",
-		.description = "Lastlog format",
-		.strptime_format = "%a %b %d %H:%M",
-	}, {
-		.re = "\\d+\\s+\\w\\w\\w\\s+\\d\\d+\\s+\\d\\d:\\d\\d:\\d\\d\\s+[+-]\\d\\d\\d\\d",
-		.description = "16 Jun 94 07:29:35 with timezone",
-		.strptime_format = "%d %b %y %H:%M:%S %z",
-	}, {
-		.re = "\\d+\\s+\\w\\w\\w\\s+\\d\\d+\\s+\\d\\d:\\d\\d:\\d\\d",
-		.description = "16 Jun 94 07:29:35 without timezone",
-		.strptime_format = "%d %b %y %H:%M:%S",
+		.re = "\\w{3}\\s+\\d{1,2}\\s+\\d\\d:\\d\\d:\\d\\d",
+		.description = "Syslog format with day",
+		.strptime_format = "%b %d %H:%M:%S",
 	},
 };
 
