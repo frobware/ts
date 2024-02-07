@@ -25,6 +25,6 @@ stdenv.mkDerivation {
   meta = {
     description = "Timestamp standard input.";
     license = lib.licenses.gpl2;
-    maintainers = [ lib.mkMaintainer { name = "frobware-x"; } ];
+    maintainers = [ lib.mkMaintainer { name = "frobware"; } ];
   };
 }
