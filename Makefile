@@ -1,6 +1,7 @@
 # If this Makefile changes, then everthing depending on MAKEFILE_PATH
 # should be rebuilt.
 MAKEFILE_PATH   := $(abspath $(lastword $(MAKEFILE_LIST)))
+NIX_FILES       := $(wildcard *.nix)
 
 HAVE_JQ         := $(shell command -v jq)
 HAVE_SED        := $(shell command -v sed)
@@ -42,17 +43,28 @@ endif
 
 CFLAGS          += $(EXTRA_CFLAGS)
 
-$(APP): $(OBJS) $(MAKEFILE_PATH) | $(BIN_DIR)
-	$(LINK.c) $(OBJS) -g -o $@ $(LIBS) $(EXTRA_LIBS)
+BUILD_FILES     := $(MAKEFILE_PATH) $(NIX_FILES) $(BUILD_DIR)/build.env
 
-$(OBJ_DIR)/%.o: %.c $(MAKEFILE_PATH) | $(OBJ_DIR) $(DEP_DIR) $(JSON_DIR)
+$(APP): $(OBJS) $(BUILD_FILES) | $(BIN_DIR)
+	$(LINK.c) $(OBJS) -o $@ $(LIBS) $(EXTRA_LIBS)
+
+$(OBJ_DIR)/%.o: %.c $(BUILD_FILES) | $(OBJ_DIR) $(DEP_DIR) $(JSON_DIR)
 ifeq ($(IS_CLANG),yes)
 	$(CC) $(CC_IMPLICIT_INCLUDE_DIRS) $(CFLAGS) -MJ$(JSON_DIR)/$*.json -MMD -MP -MF$(DEP_DIR)/$*.d -c $< -o $@
 else
 	$(CC) $(CC_IMPLICIT_INCLUDE_DIRS) $(CFLAGS) -MMD -MP -MF$(DEP_DIR)/$*.d -c $< -o $@
 endif
 
-$(BIN_DIR) $(OBJ_DIR) $(DEP_DIR) $(JSON_DIR) $(INSTALL_BINDIR):
+$(BUILD_DIR)/build.env: FORCE | $(BUILD_DIR)
+	@printenv | grep '^HOST' > $@.tmp || true
+	@printenv | grep '^NIX' >> $@.tmp || true
+	@printenv | grep '^BUILD_WITH' >> $@.tmp || true
+	@cmp -s $@.tmp $@ || mv $@.tmp $@
+	@rm -f $@.tmp
+
+FORCE:
+
+$(BIN_DIR) $(OBJ_DIR) $(DEP_DIR) $(JSON_DIR) $(INSTALL_BINDIR) $(BUILD_DIR):
 	@mkdir -p $@
 
 .PHONY: install
@@ -62,6 +74,10 @@ install: $(APP) | $(INSTALL_BINDIR)
 .PHONY: clean
 clean:
 	$(RM) -r $(OBJS) $(DEPS) $(JSON_FILES) $(APP)
+
+.PHONY: rclean
+rclean:
+	$(RM) -r $(BUILD_DIR)
 
 .PHONY: include-what-you-use
 include-what-you-use:
@@ -109,6 +125,7 @@ endif
 .PHONY: verify
 verify:
 	@echo "APP=$(APP)"
+	@echo "BUILD_FILES=$(BUILD_FILES)"
 	@echo "CC_IMPLICIT_INCLUDES=$(CC_IMPLICIT_INCLUDES)"
 	@echo "CC_IMPLICIT_INCLUDE_PATHS=$(CC_IMPLICIT_INCLUDE_PATHS)"
 	@echo "CFLAGS=$(CFLAGS)"
@@ -121,6 +138,9 @@ verify:
 	@echo "IS_CLANG=$(IS_CLANG)"
 	@echo "JSON_FILES=$(JSON_FILES)"
 	@echo "LIBS=$(LIBS)"
+	@echo "MAKEFILE_LIST=$(MAKEFILE_LIST)"
+	@echo "MAKEFILE_PATH=$(MAKEFILE_PATH)"
+	@echo "NIX_FILES=$(NIX_FILES)"
 	@echo "OBJS=$(OBJS)"
 	@echo "OBJ_DIR=$(OBJ_DIR)"
 	@echo "SRCS=$(SRCS)"
