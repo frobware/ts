@@ -56,10 +56,10 @@
           }
 
           export ASAN_OPTIONS=abort_on_error=1
-          export BUILD_WITH_ASAN=1
-          export BUILD_WITH_DEBUG=1
+          export TS_BUILD_WITH_ASAN=1
+          export TS_BUILD_WITH_DEBUG=1
 
-          if [[ "{$BUILD_WITH_DEBUG:-" ]]; then
+          if [[ "{$TS_BUILD_WITH_DEBUG:-" ]]; then
             # There's a better debug experience when _FORTIFY_SOURCE is not set.
             # Variables stop being reported as 'optimised out'.
             echo "DEBUG build: removing 'fortify fortify3' from \$NIX_HARDENING_ENABLE"

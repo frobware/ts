@@ -30,12 +30,12 @@ ifeq ($(IS_CLANG),yes)
 COMPILE.c       += -MJ$(JSON_DIR)/$*.json
 endif
 
-ifeq ($(BUILD_WITH_ASAN),1)
+ifeq ($(TS_BUILD_WITH_ASAN),1)
 CFLAGS          += -fsanitize=address,undefined,bounds \
 		   -fsanitize-address-use-after-scope
 endif
 
-ifeq ($(BUILD_WITH_DEBUG),1)
+ifeq ($(TS_BUILD_WITH_DEBUG),1)
 CFLAGS          += -g -ggdb3 -O0 -fno-inline -fno-omit-frame-pointer -U_FORTIFY_SOURCE
 else
 CFLAGS          += -O3 -finline-functions -march=native -funroll-loops -fno-omit-frame-pointer
@@ -152,7 +152,7 @@ pgo: pgo-generate pgo-run pgo-use
 
 .PHONY: pgo-generate
 pgo-generate: clean
-	$(MAKE) BUILD_WITH_DEBUG=0 BUILD_WITH_ASAN=0 EXTRA_CFLAGS="$(EXTRA_CFLAGS) -fprofile-generate -flto" clean $(APP)
+	$(MAKE) TS_BUILD_WITH_DEBUG=0 TS_BUILD_WITH_ASAN=0 EXTRA_CFLAGS="$(EXTRA_CFLAGS) -fprofile-generate -flto" clean $(APP)
 
 .PHONY: pgo-run
 pgo-run:
@@ -165,7 +165,7 @@ pgo-run:
 
 .PHONY: pgo-use
 pgo-use: clean
-	$(MAKE) BUILD_WITH_DEBUG=0 BUILD_WITH_ASAN=0 EXTRA_CFLAGS="$(EXTRA_CFLAGS) -fprofile-use -fprofile-correction -flto" clean $(APP)
+	$(MAKE) TS_BUILD_WITH_DEBUG=0 TS_BUILD_WITH_ASAN=0 EXTRA_CFLAGS="$(EXTRA_CFLAGS) -fprofile-use -fprofile-correction -flto" clean $(APP)
 
 .PHONY: nix-build
 nix-build:
