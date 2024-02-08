@@ -1,0 +1,96 @@
+# -*- mode: Makefile -*-
+
+# The target `compile_commands.json` facilitates the creation of a
+# Clang Compilation Database, an essential resource for a wide range
+# of development tools, including but not limited to environments like
+# Emacs with Language Server Protocol (LSP).
+#
+# Its availability is particularly critical on macOS, where
+# alternative approaches to generate this database, such as `bear(1)`,
+# are not viable. This database enhances tooling efficiency by
+# providing detailed records of compilation commands, thereby
+# improving code analysis, navigation, and auto-completion
+# capabilities across various platforms and development setups.
+#
+# Steps:
+#
+# 1. Extract Include Paths:
+#
+# The compiler (`$(CC)`) is invoked with flags that cause it to output
+# include paths, including the default include paths it searches for
+# header files. This output is piped into `sed`.
+#
+# 2. First `sed` Command:
+#
+# It looks for the range between `#include <...> search starts here:`
+# and `End of search list.` in the compiler's verbose output. The
+# command within the braces, `{//!p}`, tells `sed` to print all lines
+# within this range except for the lines that match the range
+# delimiters themselves.
+#
+# 3. Second sed` Command:
+#
+# Removes any lines containing `(framework directory)` from the output
+# of the first `sed` command. This is specific to macOS, where
+# `/usr/bin/clang` includes framework directories in its list of
+# include paths, which are not standard include directories and might
+# not be relevant for all uses (e.g., generating a
+# `compile_commands.json` file).
+#
+# In summary, this `sed` command sequence extracts the list of
+# compiler include paths, excluding the lines marking the start and
+# end of the list and any lines referring to framework directories, to
+# accommodate the specifics of macOS's clang output.
+
+CC_IMPLICIT_INCLUDE_PATHS := $(shell $(CC) -v -E -x c /dev/null 2>&1 \
+	| sed -n '/#include <...> search starts here:/,/End of search list./{//!p}' \
+	| sed '/(framework directory)/d')
+
+CC_IMPLICIT_INCLUDES := $(patsubst %,-I%,$(CC_IMPLICIT_INCLUDE_PATHS))
+
+# $ make CC=clang clean compile_commands.json
+.PHONY: compile_commands.json
+compile_commands.json:
+ifeq ($(IS_CLANG),yes)
+	$(MAKE)	EXTRA_CFLAGS="$(EXTRA_CFLAGS) $(CC_IMPLICIT_INCLUDES)" clean $(APP)
+	@echo '[' > $@
+	@$(foreach file,$(JSON_FILES),cat $(file) >> $@;)
+	@@sed -i '$$s/,$$/]/' $@
+ifneq ($(HAVE_JQ),)
+	@jq '.' $@ > $@.tmp && mv $@.tmp $@
+endif
+else
+	@echo "IS_CLANG=$(IS_CLANG); need clang to generate $@"
+endif
+
+# Sed in detail (because I will forget how this works).
+#
+# The `!p` command in `sed` is used in combination with the `-n`
+# option and a range of lines to selectively print lines from a file
+# or stream. Here's a breakdown of how it works in practice:
+#
+# - -n:
+#
+# This tells `sed` not to automatically print each line of input.
+#
+# - /start/,/end/:
+#
+# This specifies a range of lines starting from the first line
+# matching the `start` pattern to the next line matching the `end`
+# pattern. All commands within the curly braces `{}` are applied only
+# to this range.
+#
+# //!p:
+#
+# The `!` operator negates a condition.
+#
+# The `//` (empty pattern) reuses the last matched regex, which in
+# this context refers to the range patterns (`/start/` and `/end/`).
+# So, `//` effectively matches lines that are either `/start/` or
+# `/end/`. The `p` command in `sed` is used to print the current
+# pattern space (i.e., the current line being processed).
+#
+# Combined, `//!p` means "do not print lines that match the last
+# search pattern". Since the last search pattern is the range
+# `/start/,/end/`, it effectively means "do not print the start and
+# end lines of this range."

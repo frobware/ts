@@ -27,7 +27,7 @@ JSON_FILES      := $(patsubst %.c,$(JSON_DIR)/%.json,$(SRCS))
 
 ENV_DEPS        := TS_BUILD_WITH_DEBUG TS_BUILD_WITH_ASAN EXTRA_CFLAGS EXTRA_LIBS BUILD_HOSTNAME
 ENV_FILE_DEPS   := $(foreach var,$(ENV_DEPS),$(ENV_DIR)/$(var))
-BUILD_CONFIGS	:= $(ENV_FILE_DEPS) $(MAKEFILE_PATH) $(NIX_FILES)
+BUILD_CONFIGS	:= $(ENV_FILE_DEPS) $(MAKEFILE_PATH) $(NIX_FILES) Makefile.clang
 
 CFLAGS          ?= -Wall -Wformat -Wextra -Werror -Wshadow -Wunused
 LIBS            += -lpcre
@@ -103,33 +103,6 @@ covcheck:
 	cov-analyze --dir=$(COV_DIR) --wait-for-license
 	cov-format-errors --dir=$(COV_DIR) --emacs-style
 
-# The following variables are to help generate a compile_commands.json
-# on macOS where bear(1) does not work.
-#
-# Detect default C include paths. This command runs the compiler with
-# flags that output include paths. The first sed command extracts the
-# paths listed between specific markers in the compiler output. The
-# second sed command removes any lines containing '(framework
-# directory)' as seen on macOS with /usr/bin/clang.
-CC_IMPLICIT_INCLUDE_PATHS := $(shell $(CC) -v -E -x c /dev/null 2>&1 | sed -n '/#include <...> search starts here:/,/End of search list./{//!p}' | sed '/(framework directory)/d')
-
-CC_IMPLICIT_INCLUDES := $(patsubst %,-I%,$(CC_IMPLICIT_INCLUDE_PATHS))
-
-# make CC=clang clean compile_commands.json
-.PHONY: compile_commands.json
-compile_commands.json:
-ifeq ($(IS_CLANG),yes)
-	$(MAKE)	EXTRA_CFLAGS="$(EXTRA_CFLAGS) $(CC_IMPLICIT_INCLUDES)" clean $(APP)
-	@echo '[' > $@
-	@$(foreach file,$(JSON_FILES),cat $(file) >> $@;)
-	@@sed -i '$$s/,$$/]/' $@
-ifneq ($(HAVE_JQ),)
-	@jq '.' $@ > $@.tmp && mv $@.tmp $@
-endif
-else
-	@echo "IS_CLANG=$(IS_CLANG); need clang to generate $@"
-endif
-
 .PHONY: verify
 verify:
 	@echo "APP=$(APP)"
@@ -183,5 +156,7 @@ pgo-use: clean
 .PHONY: nix-build
 nix-build:
 	nix build --print-build-logs .
+
+include Makefile.clang
 
 -include $(DEP)
