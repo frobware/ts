@@ -6,12 +6,14 @@ NIX_FILES       := $(wildcard *.nix)
 HAVE_JQ         := $(shell command -v jq)
 HAVE_SED        := $(shell command -v sed)
 IS_CLANG        := $(shell $(CC) --version | grep -q "clang" && echo "yes" || echo "no")
+BUILD_HOSTNAME  := $(shell uname -n)
 
 INSTALL_BINDIR  ?= /usr/local/bin
 BUILD_DIR       ?= build
 
 BIN_DIR         := $(BUILD_DIR)/bin
 DEP_DIR         := $(BUILD_DIR)/dep
+ENV_DIR         := $(BUILD_DIR)/env
 JSON_DIR        := $(BUILD_DIR)/json
 OBJ_DIR         := $(BUILD_DIR)/obj
 COV_DIR         := $(BUILD_DIR)/cov
@@ -22,6 +24,10 @@ SRCS            := ts.c
 OBJS            := $(patsubst %.c,$(OBJ_DIR)/%.o,$(SRCS))
 DEPS            := $(patsubst %.c,$(DEP_DIR)/%.d,$(SRCS))
 JSON_FILES      := $(patsubst %.c,$(JSON_DIR)/%.json,$(SRCS))
+
+ENV_DEPS        := TS_BUILD_WITH_DEBUG TS_BUILD_WITH_ASAN EXTRA_CFLAGS EXTRA_LIBS BUILD_HOSTNAME
+ENV_FILE_DEPS   := $(foreach var,$(ENV_DEPS),$(ENV_DIR)/$(var))
+BUILD_CONFIGS	:= $(ENV_FILE_DEPS) $(MAKEFILE_PATH) $(NIX_FILES)
 
 CFLAGS          ?= -Wall -Wformat -Wextra -Werror -Wshadow -Wunused
 LIBS            += -lpcre
@@ -43,28 +49,30 @@ endif
 
 CFLAGS          += $(EXTRA_CFLAGS)
 
-BUILD_FILES     := $(MAKEFILE_PATH) $(NIX_FILES) $(BUILD_DIR)/build.env
-
-$(APP): $(OBJS) $(BUILD_FILES) | $(BIN_DIR)
+$(APP): $(OBJS) $(BUILD_CONFIGS) | $(BIN_DIR)
 	$(LINK.c) $(OBJS) -o $@ $(LIBS) $(EXTRA_LIBS)
 
-$(OBJ_DIR)/%.o: %.c $(BUILD_FILES) | $(OBJ_DIR) $(DEP_DIR) $(JSON_DIR)
+$(OBJ_DIR)/%.o: %.c $(BUILD_CONFIGS) | $(OBJ_DIR) $(DEP_DIR) $(JSON_DIR)
 ifeq ($(IS_CLANG),yes)
 	$(CC) $(CC_IMPLICIT_INCLUDE_DIRS) $(CFLAGS) -MJ$(JSON_DIR)/$*.json -MD -MP -MF$(DEP_DIR)/$*.d -c $< -o $@
 else
 	$(CC) $(CC_IMPLICIT_INCLUDE_DIRS) $(CFLAGS) -MD -MP -MF$(DEP_DIR)/$*.d -c $< -o $@
 endif
 
-$(BUILD_DIR)/build.env: FORCE | $(BUILD_DIR)
-	@printenv | grep '^HOST' > $@.tmp || true
-	@printenv | grep '^NIX' >> $@.tmp || true
-	@printenv | grep '^BUILD_WITH' >> $@.tmp || true
-	@cmp -s $@.tmp $@ || mv $@.tmp $@
-	@rm -f $@.tmp
+.PHONY: FORCE
 
-FORCE:
+define DEPENDABLE_VAR
+$(ENV_DIR)/$(1): | $(ENV_DIR)
+	@echo -n $($(1)) > $(ENV_DIR)/$(1)
+ifneq ("$(file <$(ENV_DIR)/$(1))","$($(1))")
+$(ENV_DIR)/$(1): FORCE
+endif
 
-$(BIN_DIR) $(OBJ_DIR) $(DEP_DIR) $(JSON_DIR) $(INSTALL_BINDIR) $(BUILD_DIR):
+endef
+
+$(foreach var,$(ENV_DEPS),$(eval $(call DEPENDABLE_VAR,$(var))))
+
+$(BIN_DIR) $(BUILD_DIR) $(DEP_DIR) $(ENV_DIR) $(INSTALL_BINDIR) $(JSON_DIR) $(OBJ_DIR):
 	@mkdir -p $@
 
 .PHONY: install
@@ -125,12 +133,15 @@ endif
 .PHONY: verify
 verify:
 	@echo "APP=$(APP)"
-	@echo "BUILD_FILES=$(BUILD_FILES)"
+	@echo "BUILD_CONFIGS=$(BUILD_CONFIGS)"
+	@echo "BUILD_HOSTNAME=$(BUILD_HOSTNAME)"
 	@echo "CC_IMPLICIT_INCLUDES=$(CC_IMPLICIT_INCLUDES)"
 	@echo "CC_IMPLICIT_INCLUDE_PATHS=$(CC_IMPLICIT_INCLUDE_PATHS)"
 	@echo "CFLAGS=$(CFLAGS)"
 	@echo "DEPS=$(DEPS)"
 	@echo "DEP_DIR=$(DEP_DIR)"
+	@echo "ENV_DEPS=$(ENV_DEPS)"
+	@echo "ENV_FILE_DEPS=$(ENV_FILE_DEPS)"
 	@echo "EXTRA_CFLAGS=$(EXTRA_CFLAGS)"
 	@echo "EXTRA_LIBS=$(EXTRA_LIBS)"
 	@echo "HAVE_JQ=$(HAVE_JQ)"
@@ -144,6 +155,8 @@ verify:
 	@echo "OBJS=$(OBJS)"
 	@echo "OBJ_DIR=$(OBJ_DIR)"
 	@echo "SRCS=$(SRCS)"
+	@echo "TS_BUILD_WITH_ASAN=$(TS_BUILD_WITH_ASAN)"
+	@echo "TS_BUILD_WITH_DEBUG=$(TS_BUILD_WITH_DEBUG)"
 
 .PHONY: pgo
 pgo: pgo-generate pgo-run pgo-use
