@@ -50,9 +50,9 @@ $(APP): $(OBJS) $(BUILD_FILES) | $(BIN_DIR)
 
 $(OBJ_DIR)/%.o: %.c $(BUILD_FILES) | $(OBJ_DIR) $(DEP_DIR) $(JSON_DIR)
 ifeq ($(IS_CLANG),yes)
-	$(CC) $(CC_IMPLICIT_INCLUDE_DIRS) $(CFLAGS) -MJ$(JSON_DIR)/$*.json -MMD -MP -MF$(DEP_DIR)/$*.d -c $< -o $@
+	$(CC) $(CC_IMPLICIT_INCLUDE_DIRS) $(CFLAGS) -MJ$(JSON_DIR)/$*.json -MD -MP -MF$(DEP_DIR)/$*.d -c $< -o $@
 else
-	$(CC) $(CC_IMPLICIT_INCLUDE_DIRS) $(CFLAGS) -MMD -MP -MF$(DEP_DIR)/$*.d -c $< -o $@
+	$(CC) $(CC_IMPLICIT_INCLUDE_DIRS) $(CFLAGS) -MD -MP -MF$(DEP_DIR)/$*.d -c $< -o $@
 endif
 
 $(BUILD_DIR)/build.env: FORCE | $(BUILD_DIR)
