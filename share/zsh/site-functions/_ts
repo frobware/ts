@@ -4,4 +4,5 @@ _arguments \
   '(-i)-i[Report incremental timestamps, time elapsed since the last timestamp.]' \
   '(-m)-m[Use the system'\''s monotonic clock for timestamps.]' \
   '(-r)-r[Convert existing timestamps in the input to relative times.]' \
-  '(-s)-s[Report incremental timestamps, time elapsed since start of the program.]'
+  '(-s)-s[Report incremental timestamps, time elapsed since start of the program.]' \
+  '(-p)-p+[Set the precision level for relative timestamps (1-4)]:precision level:(1 2 3 4)'
