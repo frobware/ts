@@ -1,0 +1,14 @@
+#!/usr/bin/env bash
+
+# A git commit hook to detect whitespace changes.
+#
+# $ install -m755 hack/pre-commit .git/hooks
+#
+# Check for whitespace errors.
+if git diff --cached --check; then
+    echo "Whitespace check passed."
+    exit 0
+else
+    echo "Error: Whitespace issues detected."
+    exit 1
+fi
