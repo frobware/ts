@@ -5,7 +5,7 @@ NIX_FILES       := $(wildcard *.nix)
 
 HAVE_JQ         := $(shell command -v jq)
 HAVE_SED        := $(shell command -v sed)
-IS_CLANG        := $(shell $(CC) --version | grep -q "clang" && echo "yes" || echo "no")
+CC_IS_CLANG     := $(shell $(CC) --version | grep -q "clang" && echo "yes" || echo "no")
 BUILD_HOSTNAME  := $(shell uname -n)
 
 INSTALL_BINDIR  ?= /usr/local/bin
@@ -32,7 +32,7 @@ BUILD_CONFIGS	:= $(ENV_FILE_DEPS) $(MAKEFILE_PATH) $(NIX_FILES) Makefile.clang
 CFLAGS          ?= -Wall -Wformat -Wextra -Werror -Wshadow -Wunused
 LIBS            += -lpcre
 
-ifeq ($(IS_CLANG),yes)
+ifeq ($(CC_IS_CLANG),yes)
 COMPILE.c       += -MJ$(JSON_DIR)/$*.json
 endif
 
@@ -53,7 +53,7 @@ $(APP): $(OBJS) $(BUILD_CONFIGS) | $(BIN_DIR)
 	$(LINK.c) $(OBJS) -o $@ $(LIBS) $(EXTRA_LIBS)
 
 $(OBJ_DIR)/%.o: %.c $(BUILD_CONFIGS) | $(OBJ_DIR) $(DEP_DIR) $(JSON_DIR)
-ifeq ($(IS_CLANG),yes)
+ifeq ($(CC_IS_CLANG),yes)
 	$(CC) $(CC_IMPLICIT_INCLUDE_DIRS) $(CFLAGS) -MJ$(JSON_DIR)/$*.json -MD -MP -MF$(DEP_DIR)/$*.d -c $< -o $@
 else
 	$(CC) $(CC_IMPLICIT_INCLUDE_DIRS) $(CFLAGS) -MD -MP -MF$(DEP_DIR)/$*.d -c $< -o $@
@@ -110,6 +110,7 @@ verify:
 	@echo "BUILD_HOSTNAME=$(BUILD_HOSTNAME)"
 	@echo "CC_IMPLICIT_INCLUDES=$(CC_IMPLICIT_INCLUDES)"
 	@echo "CC_IMPLICIT_INCLUDE_PATHS=$(CC_IMPLICIT_INCLUDE_PATHS)"
+	@echo "CC_IS_CLANG=$(CC_IS_CLANG)"
 	@echo "CFLAGS=$(CFLAGS)"
 	@echo "DEPS=$(DEPS)"
 	@echo "DEP_DIR=$(DEP_DIR)"
@@ -119,7 +120,6 @@ verify:
 	@echo "EXTRA_LIBS=$(EXTRA_LIBS)"
 	@echo "HAVE_JQ=$(HAVE_JQ)"
 	@echo "HAVE_SED=$(HAVE_SED)"
-	@echo "IS_CLANG=$(IS_CLANG)"
 	@echo "JSON_FILES=$(JSON_FILES)"
 	@echo "LIBS=$(LIBS)"
 	@echo "MAKEFILE_LIST=$(MAKEFILE_LIST)"

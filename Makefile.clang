@@ -51,7 +51,7 @@ CC_IMPLICIT_INCLUDES := $(patsubst %,-I%,$(CC_IMPLICIT_INCLUDE_PATHS))
 # $ make CC=clang clean compile_commands.json
 .PHONY: compile_commands.json
 compile_commands.json:
-ifeq ($(IS_CLANG),yes)
+ifeq ($(CC_IS_CLANG),yes)
 	$(MAKE)	EXTRA_CFLAGS="$(EXTRA_CFLAGS) $(CC_IMPLICIT_INCLUDES)" clean $(APP)
 	@echo '[' > $@
 	@$(foreach file,$(JSON_FILES),cat $(file) >> $@;)
@@ -60,7 +60,7 @@ ifneq ($(HAVE_JQ),)
 	@jq '.' $@ > $@.tmp && mv $@.tmp $@
 endif
 else
-	@echo "IS_CLANG=$(IS_CLANG); need clang to generate $@"
+	@echo "CC_IS_CLANG=$(CC_IS_CLANG); need clang to generate $@"
 endif
 
 # Sed in detail (because I will forget how this works).
