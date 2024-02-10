@@ -25,7 +25,7 @@ OBJS            := $(patsubst %.c,$(OBJ_DIR)/%.o,$(SRCS))
 DEPS            := $(patsubst %.c,$(DEP_DIR)/%.d,$(SRCS))
 JSON_FILES      := $(patsubst %.c,$(JSON_DIR)/%.json,$(SRCS))
 
-ENV_DEPS        := TS_BUILD_WITH_DEBUG TS_BUILD_WITH_ASAN EXTRA_CFLAGS EXTRA_LIBS BUILD_HOSTNAME
+ENV_DEPS        := DEBUG USE_ASAN EXTRA_CFLAGS EXTRA_LIBS BUILD_HOSTNAME
 ENV_FILE_DEPS   := $(foreach var,$(ENV_DEPS),$(ENV_DIR)/$(var))
 BUILD_CONFIGS	:= $(ENV_FILE_DEPS) $(MAKEFILE_PATH) $(NIX_FILES) Makefile.clang
 
@@ -36,12 +36,12 @@ ifeq ($(CC_IS_CLANG),yes)
 COMPILE.c       += -MJ$(JSON_DIR)/$*.json
 endif
 
-ifeq ($(TS_BUILD_WITH_ASAN),1)
+ifeq ($(USE_ASAN),1)
 CFLAGS          += -fsanitize=address,undefined,bounds \
 		   -fsanitize-address-use-after-scope
 endif
 
-ifeq ($(TS_BUILD_WITH_DEBUG),1)
+ifeq ($(DEBUG),1)
 CFLAGS          += -g -ggdb3 -O0 -fno-inline -fno-omit-frame-pointer -U_FORTIFY_SOURCE
 else
 CFLAGS          += -O3 -finline-functions -march=native -funroll-loops -fno-omit-frame-pointer
@@ -112,6 +112,7 @@ verify:
 	@echo "CC_IMPLICIT_INCLUDE_PATHS=$(CC_IMPLICIT_INCLUDE_PATHS)"
 	@echo "CC_IS_CLANG=$(CC_IS_CLANG)"
 	@echo "CFLAGS=$(CFLAGS)"
+	@echo "DEBUG=$(DEBUG)"
 	@echo "DEPS=$(DEPS)"
 	@echo "DEP_DIR=$(DEP_DIR)"
 	@echo "ENV_DEPS=$(ENV_DEPS)"
@@ -128,8 +129,7 @@ verify:
 	@echo "OBJS=$(OBJS)"
 	@echo "OBJ_DIR=$(OBJ_DIR)"
 	@echo "SRCS=$(SRCS)"
-	@echo "TS_BUILD_WITH_ASAN=$(TS_BUILD_WITH_ASAN)"
-	@echo "TS_BUILD_WITH_DEBUG=$(TS_BUILD_WITH_DEBUG)"
+	@echo "USE_ASAN=$(USE_ASAN)"
 
 .PHONY: pgo
 pgo: pgo-generate pgo-run pgo-use
@@ -138,7 +138,7 @@ pgo: pgo-generate pgo-run pgo-use
 
 .PHONY: pgo-generate
 pgo-generate: clean
-	$(MAKE) TS_BUILD_WITH_DEBUG=0 TS_BUILD_WITH_ASAN=0 EXTRA_CFLAGS="$(EXTRA_CFLAGS) -fprofile-generate -flto" clean $(APP)
+	$(MAKE) DEBUG=0 USE_ASAN=0 EXTRA_CFLAGS="$(EXTRA_CFLAGS) -fprofile-generate -flto" clean $(APP)
 
 .PHONY: pgo-run
 pgo-run:
@@ -151,7 +151,7 @@ pgo-run:
 
 .PHONY: pgo-use
 pgo-use: clean
-	$(MAKE) TS_BUILD_WITH_DEBUG=0 TS_BUILD_WITH_ASAN=0 EXTRA_CFLAGS="$(EXTRA_CFLAGS) -fprofile-use -fprofile-correction -flto" clean $(APP)
+	$(MAKE) DEBUG=0 USE_ASAN=0 EXTRA_CFLAGS="$(EXTRA_CFLAGS) -fprofile-use -fprofile-correction -flto" clean $(APP)
 
 .PHONY: nix-build
 nix-build:
