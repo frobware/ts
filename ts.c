@@ -979,25 +979,6 @@ static void signal_handler(int sig)
 	signal_received = sig;
 }
 
-// Handling the monotonic clock with real-world timestamps:
-//
-// The moreutils/ts implementation uses a clever approach to combine
-// the stability of the monotonic clock with the relevance of
-// real-world timestamps.
-//
-// The monotonic clock (CLOCK_MONOTONIC) is used for measuring time
-// intervals. It is not affected by system time changes (like NTP
-// adjustments or DST shifts), making it ideal for timing where
-// consistency is key. However, the monotonic clock does not represent
-// real-world time; it typically measures time since system boot.
-//
-// To output meaningful timestamps while using the monotonic clock,
-// the program calculates a 'monodelta' at startup. This is the
-// difference between the current real-world time (CLOCK_REALTIME) and
-// the current monotonic time. By adding this delta to the monotonic
-// timestamps, we adjust them to align with the real-world time. This
-// way, the timestamps output by the program represent the actual time
-// of day, even though the timing is done using the monotonic clock.
 int main(int argc, char *argv[])
 {
 	test_precision_variations();
