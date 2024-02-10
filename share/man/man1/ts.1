@@ -4,7 +4,7 @@ ts \- timestamp input
 
 .SH SYNOPSIS
 .B ts
-[\-r] [\-i | \-s] [\-m] [format]
+[\-r] [\-i | \-s] [\-m] [\-p <precision level>] [format]
 
 .SH DESCRIPTION
 The
@@ -65,11 +65,31 @@ Report incremental timestamps, time elapsed since start of the program.
 .B \-m
 Use the system's monotonic clock for timestamps.
 
+.TP
+.B \-p <precision level>
+Set the precision level for relative timestamps, where precision
+ranges from 1 to 4. Level 1 offers a broad overview, emphasising the
+most significant non-zero unit of time. Levels 2 and 3 increase detail
+by focusing on the two or three most significant non-zero time units,
+respectively. Level 4 provides the highest detail, retaining up to
+four significant non-zero time units without any approximation. The
+default precision level is 2.
+
 .SH ENVIRONMENT
 The standard
 .B TZ
 environment variable controls what time zone dates are assumed to be
 in if a timezone is not specified as part of the date.
+
+.SH NOTES
+The
+.B \-p
+option for specifying precision level is an extension specific to this
+version of
+.B ts
+and is not available in the moreutils version of the utility. Users of
+the moreutils implementation should be aware that this feature is
+exclusive to this implementation and tailor their usage accordingly.
 
 .SH AUTHOR
 Copyright 2006 by Joey Hess <id@joeyh.name>
