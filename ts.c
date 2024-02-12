@@ -125,7 +125,7 @@ static struct timestamp_pattern timestamps[] = {{
 		.description = "Kubernetes pod log entry with timestamp",
 		.strptime_format = "%Y-%m-%dT%H:%M:%S",
 	}, {
-		.re = "\\d{4} \\d{2}:\\d{2}:\\d{2}\\.\\d{6}",
+		.re = "\\d{2}\\d{2} \\d{2}:\\d{2}:\\d{2}\\.\\d{6}",
 		.description = "Kubernetes client-go log format with microseconds",
 		.strptime_format = "%m%d %H:%M:%S",
 	}, {
