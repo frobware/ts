@@ -1,94 +1,10 @@
-Jan  9 00:35:59 host syslogd[441]: Statistics
-Jan  9 00:46:00 host syslogd[441]: Statistics
-Jan  9 00:56:54 host syslogd[441]: Statistics
-Jan  9 01:07:48 host syslogd[441]: Statistics
-Jan  9 01:18:42 host syslogd[441]: Statistics
-Jan  9 01:29:36 host syslogd[441]: Statistics
-Jan  9 01:40:30 host syslogd[441]: Statistics
-Jan  9 01:51:24 host syslogd[441]: Statistics
-Jan  9 02:02:18 host syslogd[441]: Statistics
-Jan  9 02:13:12 host syslogd[441]: Statistics
-Jan  9 02:24:06 host syslogd[441]: Statistics
-Jan  9 02:35:04 host syslogd[441]: Statistics
-Jan  9 02:46:03 host syslogd[441]: Statistics
-Jan  9 02:57:03 host syslogd[441]: Statistics
-Jan  9 03:08:03 host syslogd[441]: Statistics
-Jan  9 03:19:03 host syslogd[441]: Statistics
-Jan  9 03:30:38 host syslogd[441]: Statistics
-Jan  9 03:41:38 host syslogd[441]: Statistics
-Jan  9 03:52:38 host syslogd[441]: Statistics
-Jan  9 04:02:38 host syslogd[441]: Statistics
-Jan  9 04:13:32 host syslogd[441]: Statistics
-Jan  9 04:24:32 host syslogd[441]: Statistics
-Jan  9 04:35:18 host syslogd[441]: Statistics
-Jan  9 04:46:18 host syslogd[441]: Statistics
-Jan  9 04:57:18 host syslogd[441]: Statistics
-Jan  9 05:07:54 host syslogd[441]: Statistics
-Jan  9 05:18:54 host syslogd[441]: Statistics
-Jan  9 05:29:54 host syslogd[441]: Statistics
-Jan  9 05:40:53 host syslogd[441]: Statistics
-Jan  9 05:51:53 host syslogd[441]: Statistics
-Jan  9 06:02:51 host syslogd[441]: Statistics
-Jan  9 06:13:48 host syslogd[441]: Statistics
-Jan  9 06:24:43 host syslogd[441]: Statistics
-Jan  9 06:35:37 host syslogd[441]: Statistics
-Jan  9 06:46:31 host syslogd[441]: Statistics
-Jan  9 06:57:25 host syslogd[441]: Statistics
-Jan  9 07:08:19 host syslogd[441]: Statistics
-Jan  9 07:19:13 host syslogd[441]: Statistics
-Jan  9 07:29:42 host syslogd[441]: Statistics
-Jan  9 07:40:37 host syslogd[441]: Statistics
-Jan  9 07:51:02 host syslogd[441]: Statistics
-Jan  9 08:01:59 host syslogd[441]: Statistics
-Jan  9 08:12:02 host syslogd[441]: Statistics
-Jan  9 08:22:59 host syslogd[441]: Statistics
-Jan  9 08:33:53 host syslogd[441]: Statistics
-Jan  9 08:43:53 host syslogd[441]: Statistics
-Jan  9 08:54:40 host syslogd[441]: Statistics
-Jan  9 09:05:34 host syslogd[441]: Statistics
-Jan  9 09:16:28 host syslogd[441]: Statistics
-Jan  9 09:27:15 host syslogd[441]: Statistics
-Jan  9 09:38:09 host syslogd[441]: Statistics
-Jan  9 09:49:05 host syslogd[441]: Statistics
-Jan  9 10:00:05 host syslogd[441]: Statistics
-Jan  9 10:11:05 host syslogd[441]: Statistics
-Jan  9 10:22:05 host syslogd[441]: Statistics
-Jan  9 10:33:05 host syslogd[441]: Statistics
-Jan  9 10:44:10 host syslogd[441]: Statistics
-Jan  9 10:55:10 host syslogd[441]: Statistics
-Jan  9 11:06:10 host syslogd[441]: Statistics
-Jan  9 11:17:10 host syslogd[441]: Statistics
-Jan  9 11:28:15 host syslogd[441]: Statistics
-Jan  9 11:38:29 host syslogd[441]: Statistics
-Jan  9 11:49:11 host syslogd[441]: Statistics
-Jan  9 12:00:11 host syslogd[441]: Statistics
-Jan  9 12:11:52 host syslogd[441]: Statistics
-Jan  9 12:23:10 host syslogd[441]: Statistics
-Jan  9 12:34:10 host syslogd[441]: Statistics
-Jan  9 12:45:10 host syslogd[441]: Statistics
-Jan  9 12:56:10 host syslogd[441]: Statistics
-Jan  9 13:07:10 host syslogd[441]: Statistics
-Jan  9 13:18:10 host syslogd[441]: Statistics
-Jan  9 13:28:14 host syslogd[441]: Statistics
-Jan  9 13:38:48 host syslogd[441]: Statistics
-Jan  9 13:49:35 host syslogd[441]: Statistics
-Jan  9 14:01:14 host syslogd[441]: Statistics
-Jan  9 14:12:08 host syslogd[441]: Statistics
-Jan  9 14:22:24 host syslogd[441]: Statistics
-Jan  9 14:33:18 host syslogd[441]: Statistics
-Jan  9 14:44:12 host syslogd[441]: Statistics
-Jan  9 14:55:06 host syslogd[441]: Statistics
-Jan  9 15:05:47 host syslogd[441]: Statistics
-Jan  9 15:16:41 host syslogd[441]: Statistics
-Jan  9 15:27:35 host syslogd[441]: Statistics
-Jan  9 15:37:57 host syslogd[441]: Statistics
-Jan  9 15:48:51 host syslogd[441]: Statistics
-Jan  9 15:59:45 host syslogd[441]: Statistics
-Jan  9 16:10:39 host syslogd[441]: Statistics
-Jan  9 16:21:21 host syslogd[441]: Statistics
-Jan  9 16:31:32 host syslogd[441]: Statistics
-Jan  9 16:42:26 host syslogd[441]: Statistics
-Jan  9 16:53:20 host syslogd[441]: Statistics
-Jan  9 17:03:44 host syslogd[441]: Statistics
-Jan  9 17:14:38 host syslogd[441]: Statistics
-Jan  9 17:14:38
+2023-02-01T12:34:56.123456789Z - Kubernetes pod log entry with timestamp
+0304 12:34:56.123456 - Kubernetes client-go log format with microseconds
+16 Jun 94 07:29:35 +0000 - 16 Jun 94 07:29:35 with timezone
+21 dec/93 17:05:30 +0000 - 21 dec/93 17:05:30 +0000
+21 dec 17:05:30 +0000 - 21 dec 17:05:30 +0000
+21 dec/93 17:05 - 21 dec/93 17:05 without seconds and timezone
+21 dec 17:05 - 21 dec 17:05 without seconds and timezone
+2023-02-01T12:34:56 - ISO-8601 format
+Wed Feb 01 11:34 - Lastlog format
+Feb 1 12:34:56 - Syslog format with day
