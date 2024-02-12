@@ -30,7 +30,7 @@ ENV_FILE_DEPS   := $(foreach var,$(ENV_DEPS),$(ENV_DIR)/$(var))
 BUILD_CONFIGS	:= $(ENV_FILE_DEPS) $(MAKEFILE_PATH) $(NIX_FILES) Makefile.clang
 
 CFLAGS          ?= -Wall -Wformat -Wextra -Werror -Wshadow -Wunused
-LIBS            += -lpcre
+LIBS            += -lpcre2-8
 
 ifeq ($(CC_IS_CLANG),yes)
 COMPILE.c       += -MJ$(JSON_DIR)/$*.json

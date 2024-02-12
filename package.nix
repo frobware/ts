@@ -4,7 +4,7 @@ stdenv.mkDerivation {
   name = "ts";
   src = ./.;
 
-  buildInputs = [ pkgs.pcre ];
+  buildInputs = [ pkgs.pcre2 ];
   nativeBuildInputs = [ pkgs.installShellFiles ];
 
   buildPhase = ''

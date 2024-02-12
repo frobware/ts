@@ -219,8 +219,8 @@ even though the timing is done using the monotonic clock.
 
 Before compiling the `ts` utility, you must have the
 [PCRE](https://www.pcre.org/) development library installed on your
-system. The development library is commonly named `pcre-devel`,
-`libpcre3-dev`, or a similar variant, depending on your operating
+system. The development library is commonly named `pcre2-devel`,
+`libpcre2-dev`, or a similar variant, depending on your operating
 system and distribution.
 
 ```bash

@@ -12,10 +12,12 @@
 // Feature test macro to enable strptime.
 #define _XOPEN_SOURCE
 
+#define PCRE2_CODE_UNIT_WIDTH 8
+#include <pcre2.h>
+
 #include <assert.h>
 #include <errno.h>
 #include <limits.h>
-#include <pcre.h>
 #include <signal.h>
 #include <stdbool.h>
 #include <stdio.h>
@@ -112,7 +114,8 @@ struct timestamp_pattern {
 	const char *const re;
 	const char *const description;
 	const char *strptime_format;
-	pcre *pcre;
+	pcre2_code *pcre;
+	pcre2_match_data *match_data;
 };
 
 typedef time_t composite_time[TIME_UNIT_COUNT];
@@ -469,13 +472,14 @@ static bool match_timestamp(char *subject, ssize_t len, size_t *match_start, siz
 	*strptime_fmt = NULL;
 
 	for (size_t i = 0; i < NELEMENTS(timestamps); i++) {
-		int ovector[2];
-		if (pcre_exec(timestamps[i].pcre, NULL, subject, (int)len, 0, 0, ovector, 2) >= 0) {
-			*match_start = ovector[0];
-			*match_end = ovector[1];
-			*strptime_fmt = timestamps[i].strptime_format;
-			return true;
-		}
+                if (pcre2_match(timestamps[i].pcre, (PCRE2_SPTR)subject, len, 0, 0, timestamps[i].match_data, NULL) < 0)
+			continue; // No match.
+		size_t *ovector = pcre2_get_ovector_pointer(timestamps[i].match_data);
+		assert(ovector);
+		*match_start = ovector[0];
+		*match_end = ovector[1];
+		*strptime_fmt = timestamps[i].strptime_format;
+		return true;
 	}
 
 	return false;
@@ -646,11 +650,30 @@ static void fmt_time_now(struct ts_fmt *fmt, struct timespec now)
 static void must_init_timestamp_patterns(void)
 {
 	for (size_t i = 0; i < NELEMENTS(timestamps); i++) {
-		const char *pcre_error;
-		int offset;
-		timestamps[i].pcre = pcre_compile(timestamps[i].re, 0, &pcre_error, &offset, NULL);
+		PCRE2_SIZE offset;
+		PCRE2_SPTR pattern = (PCRE2_SPTR)timestamps[i].re;
+		int rc;
+		uint32_t options = PCRE2_UTF | PCRE2_UCP;
+
+		timestamps[i].pcre = pcre2_compile(
+			pattern,                // the pattern
+			PCRE2_ZERO_TERMINATED,  // indicates the pattern is zero-terminated
+			options,		// options
+			&rc,			// for error number
+			&offset,		// for error offset
+			NULL                    // use default compile context
+			);
+
 		if (timestamps[i].pcre == NULL) {
-			fprintf(stderr, "PCRE compilation error for pattern#%zd: '%s', error='%s', offset=%d.\n", i, timestamps[i].re, pcre_error, offset);
+			PCRE2_UCHAR buf[256];
+			pcre2_get_error_message(rc, buf, sizeof(buf));
+			fprintf(stderr, "PCRE2 compilation error for pattern#%zd: '%s', error='%s', offset=%ld.\n", i, timestamps[i].re, buf, offset);
+			exit(EXIT_FAILURE);
+		}
+
+		timestamps[i].match_data = pcre2_match_data_create_from_pattern(timestamps[i].pcre, NULL);
+		if (timestamps[i].match_data == NULL) {
+			fprintf(stderr, "Failed to create match data for pattern %zu\n", i);
 			exit(EXIT_FAILURE);
 		}
 	}
@@ -739,8 +762,8 @@ static struct ts_opt parse_options(int argc, char *argv[])
 	 * %b = Abbreviated month name
 	 * %d = The day of the month as a decimal number
 	 * %H = Hours
-	 % %M = Minutes
-	 % %S = Seconds
+	 * % %M = Minutes
+	 * % %S = Seconds
 	 */
 	const char *final_format = "%b %d %H:%M:%S";
 
@@ -940,28 +963,28 @@ static void test_precision_variations(void)
 	timestamp = composite_time_to_seconds(comp_time);
 	seconds_to_composite_time(timestamp, comp_time);
 	approximate_time(2, comp_time);
-        COMP_TIME_ASSERT(comp_time, 0, 1, 0, 0, 0);
+	COMP_TIME_ASSERT(comp_time, 0, 1, 0, 0, 0);
 
 	// Test transition at midnight with precision level 3.
 	COMP_TIME_INIT(comp_time, 0, 0, 23, 59, 60);
 	timestamp = composite_time_to_seconds(comp_time);
 	seconds_to_composite_time(timestamp, comp_time);
 	approximate_time(3, comp_time);
-        COMP_TIME_ASSERT(comp_time, 0, 1, 0, 0, 0);
+	COMP_TIME_ASSERT(comp_time, 0, 1, 0, 0, 0);
 
 	// Test with minimal non-zero units and lower precision.
 	COMP_TIME_INIT(comp_time, 0, 0, 0, 1, 30);
 	timestamp = composite_time_to_seconds(comp_time);
 	seconds_to_composite_time(timestamp, comp_time);
 	approximate_time(1, comp_time);
-        COMP_TIME_ASSERT(comp_time, 0, 0, 0, 2, 0);
+	COMP_TIME_ASSERT(comp_time, 0, 0, 0, 2, 0);
 
 	// Test sparse non-zero units with high precision.
 	COMP_TIME_INIT(comp_time, 1, 0, 0, 0, 5);
 	timestamp = composite_time_to_seconds(comp_time);
 	seconds_to_composite_time(timestamp, comp_time);
 	approximate_time(4, comp_time);
-        COMP_TIME_ASSERT(comp_time, 1, 0, 0, 0, 5);
+	COMP_TIME_ASSERT(comp_time, 1, 0, 0, 0, 5);
 
 	// Test rounding in the middle of the spectrum with precision
 	// 3. Assuming no change as it's already concise.
@@ -1086,7 +1109,8 @@ int main(int argc, char *argv[])
 	free(fmt.buf);
 
 	for (size_t i = 0; i < NELEMENTS(timestamps); i++) {
-		pcre_free(timestamps[i].pcre);
+		pcre2_code_free(timestamps[i].pcre);
+		pcre2_match_data_free(timestamps[i].match_data);
 	}
 
 	if (fflush(stdout) != 0) {
