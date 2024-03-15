@@ -1,5 +1,3 @@
-# If this Makefile changes, then everthing depending on MAKEFILE_PATH
-# should be rebuilt.
 MAKEFILE_PATH   := $(abspath $(lastword $(MAKEFILE_LIST)))
 NIX_FILES       := $(wildcard *.nix)
 

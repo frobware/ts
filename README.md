@@ -24,14 +24,6 @@ While this version eliminates the dependency on Perl and its
 associated packages, it requires the [PCRE](https://www.pcre.org/)
 library for regular expression support, both at build and runtime.
 
-I was interested in a compact project to explore the creation of a
-"fat" binary using
-[cosmopolitan](https://github.com/jart/cosmopolitan), aiming to
-streamline distribution by embedding [PCRE](https://www.pcre.org/)
-within it. This approach would effectively make `ts` a static binary
-that encompasses all its dependencies, ensuring compatibility across
-various platforms and architectures.
-
 ## Synopsis
 
 ```plaintext
