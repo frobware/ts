@@ -23,12 +23,15 @@ OBJS            := $(patsubst %.c,$(OBJ_DIR)/%.o,$(SRCS))
 DEPS            := $(patsubst %.c,$(DEP_DIR)/%.d,$(SRCS))
 JSON_FILES      := $(patsubst %.c,$(JSON_DIR)/%.json,$(SRCS))
 
-ENV_DEPS        := DEBUG USE_ASAN EXTRA_CFLAGS EXTRA_LIBS BUILD_HOSTNAME
+ENV_DEPS        := DEBUG USE_ASAN EXTRA_CFLAGS EXTRA_LDFLAGS EXTRA_LIBS BUILD_HOSTNAME
 ENV_FILE_DEPS   := $(foreach var,$(ENV_DEPS),$(ENV_DIR)/$(var))
-BUILD_CONFIGS	:= $(ENV_FILE_DEPS) $(MAKEFILE_PATH) $(NIX_FILES) Makefile.clang
+BUILD_CONFIGS   := $(ENV_FILE_DEPS) $(MAKEFILE_PATH) $(NIX_FILES) Makefile.clang
+
+# Default values for PCRE2 include directory and library.
+PCRE2_CFLAGS    ?= $(shell pkg-config --cflags libpcre2-8 || true)
+PCRE2_LIBS      ?= $(shell pkg-config --libs libpcre2-8 || true)
 
 CFLAGS          ?= -Wall -Wformat -Wextra -Werror -Wshadow -Wunused
-LIBS            += -lpcre2-8
 
 ifeq ($(CC_IS_CLANG),yes)
 COMPILE.c       += -MJ$(JSON_DIR)/$*.json
@@ -45,10 +48,11 @@ else
 CFLAGS          += -O3 -finline-functions -march=native -funroll-loops -fno-omit-frame-pointer
 endif
 
-CFLAGS          += $(EXTRA_CFLAGS)
+CFLAGS          += $(PCRE2_CFLAGS) $(EXTRA_CFLAGS)
+LDFLAGS         += $(EXTRA_LDFLAGS)
 
 $(APP): $(OBJS) $(BUILD_CONFIGS) | $(BIN_DIR)
-	$(LINK.c) $(OBJS) -o $@ $(LIBS) $(EXTRA_LIBS)
+	$(LINK.c) $(OBJS) -o $@ $(LDFLAGS) $(PCRE2_LIBS) $(EXTRA_LIBS)
 
 $(OBJ_DIR)/%.o: %.c $(BUILD_CONFIGS) | $(OBJ_DIR) $(DEP_DIR) $(JSON_DIR)
 ifeq ($(CC_IS_CLANG),yes)
@@ -120,12 +124,13 @@ verify:
 	@echo "HAVE_JQ=$(HAVE_JQ)"
 	@echo "HAVE_SED=$(HAVE_SED)"
 	@echo "JSON_FILES=$(JSON_FILES)"
-	@echo "LIBS=$(LIBS)"
 	@echo "MAKEFILE_LIST=$(MAKEFILE_LIST)"
 	@echo "MAKEFILE_PATH=$(MAKEFILE_PATH)"
 	@echo "NIX_FILES=$(NIX_FILES)"
 	@echo "OBJS=$(OBJS)"
 	@echo "OBJ_DIR=$(OBJ_DIR)"
+	@echo "PCRE2_CFLAGS=$(PCRE2_CFLAGS)"
+	@echo "PCRE2_LIBS=$(PCRE2_LIBS)"
 	@echo "SRCS=$(SRCS)"
 	@echo "USE_ASAN=$(USE_ASAN)"
 

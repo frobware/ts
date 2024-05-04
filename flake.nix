@@ -70,8 +70,6 @@
             # I simply have more joy debugging with /usr/bin/clang and
             # /usr/bin/lldb on macOS.
             export CC=/usr/bin/clang
-            export EXTRA_CFLAGS="''$(pkg-config --cflags libpcre)"
-            export EXTRA_LDFLAGS="''$(pkg-config --libs-only-L libpcre)"
           ''}
         '';
       };
