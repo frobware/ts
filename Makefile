@@ -55,11 +55,7 @@ $(APP): $(OBJS) $(BUILD_CONFIGS) | $(BIN_DIR)
 	$(LINK.c) $(OBJS) -o $@ $(LDFLAGS) $(PCRE2_LIBS) $(EXTRA_LIBS)
 
 $(OBJ_DIR)/%.o: %.c $(BUILD_CONFIGS) | $(OBJ_DIR) $(DEP_DIR) $(JSON_DIR)
-ifeq ($(CC_IS_CLANG),yes)
-	$(CC) $(CC_IMPLICIT_INCLUDE_DIRS) $(CFLAGS) -MJ$(JSON_DIR)/$*.json -MD -MP -MF$(DEP_DIR)/$*.d -c $< -o $@
-else
-	$(CC) $(CC_IMPLICIT_INCLUDE_DIRS) $(CFLAGS) -MD -MP -MF$(DEP_DIR)/$*.d -c $< -o $@
-endif
+	$(CC) $(CC_IMPLICIT_INCLUDE_DIRS) $(CFLAGS) $(if $(findstring yes,$(CC_IS_CLANG)),-MJ$(JSON_DIR)/$*.json,) -MD -MP -MF$(DEP_DIR)/$*.d -c $< -o $@
 
 .PHONY: FORCE
 
