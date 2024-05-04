@@ -5,7 +5,7 @@ stdenv.mkDerivation {
   src = ./.;
 
   buildInputs = [ pkgs.pcre2 ];
-  nativeBuildInputs = [ pkgs.installShellFiles ];
+  nativeBuildInputs = [ pkgs.installShellFiles pkgs.pkg-config ];
 
   buildPhase = ''
     make clean
