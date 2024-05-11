@@ -772,6 +772,8 @@ static struct ts_opt parse_options(int argc, char *argv[])
 	} else {
 		if (option.flag_inc || option.flag_sincestart) {
 			final_format = "%H:%M:%S";
+			setenv("TZ", "GMT", 1);
+			tzset();
 		}
 	}
 
@@ -1030,13 +1032,6 @@ int main(int argc, char *argv[])
 		perror("setvbuf");
 		exit(EXIT_FAILURE);
 	}
-
-	const char *env_tz = getenv("TZ");
-	if (env_tz == NULL || *env_tz == '\0') {
-		env_tz = "UTC";
-	}
-	setenv("TZ", env_tz, 1);
-	tzset();
 
 	must_init_timestamp_patterns();
 
