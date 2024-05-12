@@ -1,5 +1,3 @@
-/* -*- mode: c; c-file-style: "linux"; -*- */
-
 // Copyright (C) 2023, 2024, Andrew McDermott. All rights reserved.
 
 // This file is part of the https://github.com/frobware/ts project.
