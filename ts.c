@@ -767,12 +767,17 @@ static struct ts_opt parse_options(int argc, char *argv[])
 
 	if (optind < argc) {
 		final_format = argv[optind];
-	} else {
-		if (option.flag_inc || option.flag_sincestart) {
+	}
+
+	if (option.flag_inc || option.flag_sincestart) {
+		// This is a departure from the moreutils version of
+		// ts. If we have a user-supplied format, then use
+		// that in preference to %H:%M:%S.
+		if (optind == argc) {
 			final_format = "%H:%M:%S";
-			setenv("TZ", "GMT", 1);
-			tzset();
 		}
+		setenv("TZ", "GMT", 1);
+		tzset();
 	}
 
 	option.format = final_format;
