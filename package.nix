@@ -1,8 +1,8 @@
-{ lib, pkgs, stdenv, ... }:
+{ lib, pkgs, stdenv, src, ... }:
 
 stdenv.mkDerivation {
   name = "ts";
-  src = ./.;
+  inherit src;
 
   buildInputs = [ pkgs.pcre2 ];
   nativeBuildInputs = [ pkgs.installShellFiles pkgs.pkg-config ];

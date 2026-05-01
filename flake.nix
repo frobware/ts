@@ -12,13 +12,13 @@
     );
 
     overlay = final: prev: {
-      ts = final.callPackage ./package.nix {};
+      ts = final.callPackage ./package.nix { src = self; };
     };
   in {
     overlays.default = overlay;
 
     packages = forAllSystems (system: pkgs: {
-      default = pkgs.callPackage ./package.nix {};
+      default = pkgs.callPackage ./package.nix { src = self; };
     });
 
     devShells = forAllSystems (system: pkgs: {
