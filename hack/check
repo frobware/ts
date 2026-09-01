@@ -38,6 +38,27 @@ expect_match() {
     fi
 }
 
+# expect_rejected DESCRIPTION REGEX ARGS... -- ts must both exit
+# non-zero and explain itself. Asserting only the status would hold
+# for any failing binary, and asserting only the diagnostic would
+# accept one that complains and then carries on.
+expect_rejected() {
+    local what=$1 pattern=$2 out status
+    shift 2
+    out=$(echo line | "$TS" "$@" 2>&1 >/dev/null)
+    status=$?
+    if (( status == 0 )); then
+        printf 'FAIL %s\n       expected a non-zero exit, got 0\n' "$what"
+        failures=$((failures + 1))
+    elif [[ ! $out =~ $pattern ]]; then
+        printf 'FAIL %s (exit %d)\n       expected match: %s\n       actual:         %q\n' \
+            "$what" "$status" "$pattern" "$out"
+        failures=$((failures + 1))
+    else
+        printf 'ok   %s\n' "$what"
+    fi
+}
+
 # run_ts TZ ARGS... -- run ts over $dated with TZ set, leaving its
 # stdout in $ts_out. A non-zero exit or empty output is recorded as a
 # failure and $ts_out is replaced by a value unique to this call, so
@@ -119,18 +140,9 @@ expect "-r -i -s is still just -r" "$plain" "$ts_out"
 run_ts UTC -r -s
 expect "-r -s is relative, not an elapsed delta" "$plain" "$ts_out"
 
-# -i and -s contradict each other and are rejected.
-out=$(echo line | "$TS" -i -s 2>&1 >/dev/null)
-expect "-i -s is rejected" "Options '-i' and '-s' cannot be used together." "$out"
-
-echo line | "$TS" -i -s >/dev/null 2>&1
-expect "-i -s exits non-zero" "1" "$?"
-
-out=$(echo line | "$TS" -p 0 2>&1 >/dev/null)
-expect_match "-p 0 is rejected" 'out of range' "$out"
-
-out=$(echo line | "$TS" -z 2>&1 >/dev/null)
-expect_match "an unknown option is rejected" '^Usage: ts ' "$(echo "$out" | tail -1)"
+expect_rejected "-i -s is rejected" "cannot be used together" -i -s
+expect_rejected "-p 0 is rejected" "out of range" -p 0
+expect_rejected "an unknown option is rejected" "Usage: ts " -z
 
 if (( failures > 0 )); then
     printf '\n%d check(s) failed\n' "$failures" >&2
