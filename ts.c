@@ -128,8 +128,8 @@ struct timestamp_pattern {
 typedef time_t composite_time[TIME_UNIT_COUNT];
 
 static struct timestamp_pattern timestamps[] = {{
-		.re = "\\d{4}-\\d{2}-\\d{2}T\\d{2}:\\d{2}:\\d{2}\\.\\d{9}Z",
-		.description = "Kubernetes pod log entry with timestamp",
+		.re = "\\d{4}-\\d{2}-\\d{2}T\\d{2}:\\d{2}:\\d{2}(?:\\.\\d+)?Z",
+		.description = "ISO-8601 with a Z suffix, as Kubernetes pod logs use",
 		.strptime_format = "%Y-%m-%dT%H:%M:%S",
 		.zone = ZONE_UTC,
 	}, {
@@ -160,7 +160,7 @@ static struct timestamp_pattern timestamps[] = {{
 		.description = "21 dec 17:05 without seconds and timezone",
 		.strptime_format = "%d %b %H:%M",
 	}, {
-		.re = "\\d\\d\\d\\d[-:]\\d\\d[-:]\\d\\dT\\d\\d:\\d\\d:\\d\\d",
+		.re = "\\d\\d\\d\\d[-:]\\d\\d[-:]\\d\\dT\\d\\d:\\d\\d:\\d\\d(?:\\.\\d+)?",
 		.description = "ISO-8601 format",
 		.strptime_format = "%Y-%m-%dT%H:%M:%S",
 	}, {

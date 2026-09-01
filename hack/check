@@ -179,6 +179,14 @@ expect "a Z timestamp renders as 16:29:35 under TZ=Asia/Tokyo" \
     "1994-06-16 16:29:35 event" \
     "$(echo "$zulu" | TZ=Asia/Tokyo "$TS" -r '%F %T')"
 
+# A fractional part of any length, with or without the Z, belongs to
+# the timestamp and must not be left stranded in the output.
+for frac in ".000000000Z" ".123456Z" ".123Z" "Z" ".123456789" ".123" ""; do
+    expect "an ISO-8601 timestamp absorbs the suffix '''$frac'''" \
+        "1994-06-16 07:29:35 event" \
+        "$(echo "1994-06-16T07:29:35$frac event" | TZ=UTC "$TS" -r '%F %T')"
+done
+
 # A timestamp with no zone names no instant, so it stays as written
 # and TZ decides what it meant.
 expect "-r leaves a zone-less timestamp as written" \
