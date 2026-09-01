@@ -40,6 +40,16 @@ jobs:
       - name: Build and check
         run: make CC=${{ matrix.cc }} check
 
+      - name: Cross-check against moreutils
+        run: |
+          if [ "$RUNNER_OS" = "Linux" ]; then
+            sudo apt-get install -y moreutils
+            make compare MOREUTILS_TS=/usr/bin/ts
+          else
+            brew install moreutils
+            make compare MOREUTILS_TS="$(brew --prefix)/bin/ts"
+          fi
+
       - name: Build and check with sanitisers
         run: |
           make rclean

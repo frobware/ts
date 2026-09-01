@@ -7,6 +7,7 @@ CC_IS_CLANG     := $(shell $(CC) --version | grep -q "clang" && echo "yes" || ec
 BUILD_HOSTNAME  := $(shell uname -n)
 
 INSTALL_BINDIR  ?= /usr/local/bin
+MOREUTILS_TS    ?=
 BUILD_DIR       ?= build
 
 BIN_DIR         := $(BUILD_DIR)/bin
@@ -80,6 +81,12 @@ install: $(APP) | $(INSTALL_BINDIR)
 .PHONY: check
 check: $(APP)
 	@hack/check $(APP)
+
+# Cross-check against the moreutils ts we reimplement. Skips when no
+# moreutils ts is installed.
+.PHONY: compare
+compare: $(APP)
+	@hack/compare-moreutils $(APP) $(MOREUTILS_TS)
 
 .PHONY: clean
 clean:

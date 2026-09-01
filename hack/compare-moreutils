@@ -1,0 +1,113 @@
+#!/usr/bin/env bash
+#
+# Cross-check ts against the moreutils implementation it reimplements.
+#
+#   $ hack/compare-moreutils build/bin/ts /usr/bin/ts
+#
+# The second argument is the moreutils ts. Without it the script looks
+# for one on PATH that is not our own binary, and skips if there is
+# none. Only -r is compared: the other modes stamp the current time,
+# so two runs never agree on the nose.
+
+set -uo pipefail
+
+OURS=${1:-build/bin/ts}
+THEIRS=${2:-}
+
+if [[ ! -x $OURS ]]; then
+    echo "no such binary: $OURS" >&2
+    exit 1
+fi
+
+if [[ -z $THEIRS ]]; then
+    for candidate in $(command -v -a ts 2>/dev/null); do
+        if [[ $candidate -ef $OURS ]]; then
+            continue
+        fi
+        if head -c 2 "$candidate" 2>/dev/null | grep -q '#!'; then
+            THEIRS=$candidate
+            break
+        fi
+    done
+fi
+
+if [[ -z $THEIRS || ! -x $THEIRS ]]; then
+    echo "no moreutils ts found; skipping comparison"
+    exit 0
+fi
+
+echo "ours:      $OURS"
+echo "moreutils: $THEIRS"
+echo
+
+# Inputs where we knowingly differ, with the reason. Parity is the
+# goal, but not bug-compatibility, and not giving up ground where we
+# recognise more than upstream does.
+#
+#   dec/93     moreutils' str2time returns undef for a slashed year,
+#              so it warns and reports the epoch. We parse it.
+#   bare ISO   moreutils' regex demands a fractional part, so it
+#              leaves an unfractioned timestamp untouched. We convert
+#              it, which is a superset rather than a disagreement.
+#   client-go  the Kubernetes MMDD form is ours alone; moreutils has
+#              no pattern for it and passes the line through.
+is_known_divergence() {
+    case $1 in
+        *dec/93*)                      return 0 ;;
+        *T[0-9][0-9]:[0-9][0-9]:[0-9][0-9]\ *) return 0 ;;
+        *T[0-9][0-9]:[0-9][0-9]:[0-9][0-9]Z*) return 0 ;;
+        [0-9][0-9][0-9][0-9]\ [0-9][0-9]:*)   return 0 ;;
+    esac
+    return 1
+}
+
+corpus=(
+    "1994-06-16T07:29:35.000000000Z kubernetes pod log"
+    "1994-06-16T07:29:35.123456Z six digit fraction"
+    "1994-06-16T07:29:35.123Z three digit fraction"
+    "1994-06-16T07:29:35.123456789 fraction without zone"
+    "1994-06-16T07:29:35 iso without fraction"
+    "1994-06-16T07:29:35Z zulu without fraction"
+    "16 Jun 94 07:29:35 +0000 zero offset"
+    "16 Jun 94 09:29:35 +0200 eastern offset"
+    "16 Jun 94 01:29:35 -0600 western offset"
+    "16 Jun 94 07:29:35 +2460 malformed offset"
+    "21 dec/93 17:05:30 +0000 slashed year with offset"
+    "21 dec 17:05:30 +0000 day and month with offset"
+    "Jun 16 07:29:35 syslog form"
+    "0616 07:29:35.123456 client-go form"
+    "no timestamp on this line at all"
+)
+
+mismatches=0
+skipped=0
+
+for tz in UTC Europe/London Asia/Tokyo America/Los_Angeles; do
+    for line in "${corpus[@]}"; do
+        ours=$(echo "$line" | TZ=$tz "$OURS" -r 2>/dev/null)
+        theirs=$(echo "$line" | TZ=$tz "$THEIRS" -r 2>/dev/null)
+
+        if [[ $ours == "$theirs" ]]; then
+            continue
+        fi
+
+        if is_known_divergence "$line"; then
+            skipped=$((skipped + 1))
+            continue
+        fi
+
+        printf 'MISMATCH  TZ=%s\n  input:     %s\n  ours:      %s\n  moreutils: %s\n' \
+            "$tz" "$line" "$ours" "$theirs"
+        mismatches=$((mismatches + 1))
+    done
+done
+
+printf '%d input(s) compared across 4 zones, %d known divergence(s) skipped\n' \
+    "${#corpus[@]}" "$skipped"
+
+if (( mismatches > 0 )); then
+    printf '%d mismatch(es) against moreutils\n' "$mismatches" >&2
+    exit 1
+fi
+
+echo "identical to moreutils on every compared input"
