@@ -77,6 +77,10 @@ $(BIN_DIR) $(BUILD_DIR) $(DEP_DIR) $(ENV_DIR) $(INSTALL_BINDIR) $(JSON_DIR) $(OB
 install: $(APP) | $(INSTALL_BINDIR)
 	@install -m 755 $(APP) $(INSTALL_BINDIR)
 
+.PHONY: check
+check: $(APP)
+	@hack/check $(APP)
+
 .PHONY: clean
 clean:
 	$(RM) -r $(OBJS) $(DEPS) $(JSON_FILES) $(APP)

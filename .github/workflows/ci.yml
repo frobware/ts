@@ -1,0 +1,46 @@
+name: CI
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+
+permissions:
+  contents: read
+
+jobs:
+  build:
+    name: build (${{ matrix.os }}, ${{ matrix.cc }})
+    runs-on: ${{ matrix.os }}
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - os: ubuntu-latest
+            cc: gcc
+          - os: ubuntu-latest
+            cc: clang
+          - os: macos-latest
+            cc: clang
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Install pcre2
+        if: runner.os == 'Linux'
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y libpcre2-dev
+
+      - name: Install pcre2
+        if: runner.os == 'macOS'
+        run: |
+          brew install pcre2
+          echo "PKG_CONFIG_PATH=$(brew --prefix pcre2)/lib/pkgconfig" >> "$GITHUB_ENV"
+
+      - name: Build and check
+        run: make CC=${{ matrix.cc }} check
+
+      - name: Build and check with sanitisers
+        run: |
+          make rclean
+          make CC=${{ matrix.cc }} DEBUG=1 USE_ASAN=1 check

@@ -1,0 +1,112 @@
+#!/usr/bin/env bash
+#
+# Behavioural checks for ts, run against a built binary.
+#
+#   $ hack/check build/bin/ts
+#
+# The unit tests compiled into ts run on every invocation, so every
+# case below exercises those as well as the behaviour it asserts.
+
+set -uo pipefail
+
+TS=${1:-build/bin/ts}
+
+if [[ ! -x $TS ]]; then
+    echo "no such binary: $TS" >&2
+    exit 1
+fi
+
+failures=0
+
+# expect DESCRIPTION EXPECTED ACTUAL
+expect() {
+    if [[ $3 == "$2" ]]; then
+        printf 'ok   %s\n' "$1"
+    else
+        printf 'FAIL %s\n       expected: %q\n       actual:   %q\n' "$1" "$2" "$3"
+        failures=$((failures + 1))
+    fi
+}
+
+# expect_match DESCRIPTION REGEX ACTUAL
+expect_match() {
+    if [[ $3 =~ $2 ]]; then
+        printf 'ok   %s\n' "$1"
+    else
+        printf 'FAIL %s\n       expected match: %s\n       actual:         %q\n' "$1" "$2" "$3"
+        failures=$((failures + 1))
+    fi
+}
+
+dated="16 Jun 94 07:29:35 +0000 event"
+
+expect_match "default format is '%b %d %H:%M:%S'" \
+    '^[A-Z][a-z][a-z] [0-9][0-9] [0-9][0-9]:[0-9][0-9]:[0-9][0-9] line$' \
+    "$(echo line | "$TS")"
+
+expect "a format argument overrides the default" \
+    "$(date +%Y) line" \
+    "$(echo line | "$TS" '%Y')"
+
+expect "-s starts from zero" \
+    "00:00:00 line" \
+    "$(echo line | "$TS" -s)"
+
+expect "-i starts from zero" \
+    "00:00:00 line" \
+    "$(echo line | "$TS" -i)"
+
+expect "a format argument overrides the -s default" \
+    "elapsed 00:00:00 line" \
+    "$(echo line | "$TS" -s 'elapsed %H:%M:%S')"
+
+# An elapsed time is not a point in time, so TZ must not shift it.
+for tz in UTC Europe/London Asia/Tokyo; do
+    expect "-s ignores TZ=$tz" \
+        "00:00:00 line" \
+        "$(echo line | TZ=$tz "$TS" -s)"
+done
+
+# -r converts timestamps found in the input, which are points in
+# time, so TZ does apply.
+expect "-r honours TZ=UTC" \
+    "1994-06-16 07:29:35 event" \
+    "$(echo "$dated" | TZ=UTC "$TS" -r '%F %T')"
+
+expect "-r honours TZ=Europe/London" \
+    "1994-06-16 08:29:35 event" \
+    "$(echo "$dated" | TZ=Europe/London "$TS" -r '%F %T')"
+
+# -r supersedes -i and -s rather than being corrupted by them.
+expect "-r -s formats as plain -r" \
+    "$(echo "$dated" | TZ=Europe/London "$TS" -r '%F %T')" \
+    "$(echo "$dated" | TZ=Europe/London "$TS" -r -s '%F %T')"
+
+expect "-r -i formats as plain -r" \
+    "$(echo "$dated" | TZ=Europe/London "$TS" -r '%F %T')" \
+    "$(echo "$dated" | TZ=Europe/London "$TS" -r -i '%F %T')"
+
+expect "-r -s is relative, not an elapsed delta" \
+    "$(echo "$dated" | "$TS" -r)" \
+    "$(echo "$dated" | "$TS" -r -s)"
+
+# -i and -s contradict each other and are rejected.
+out=$(echo line | "$TS" -i -s 2>&1 >/dev/null)
+expect "-i -s is rejected" "Options '-i' and '-s' cannot be used together." "$out"
+
+echo line | "$TS" -i -s >/dev/null 2>&1
+expect "-i -s exits non-zero" "1" "$?"
+
+echo line | "$TS" -p 0 >/dev/null 2>&1
+expect "-p 0 is rejected" "1" "$?"
+
+echo line | "$TS" -z >/dev/null 2>&1
+expect "an unknown option is rejected" "1" "$?"
+
+if (( failures > 0 )); then
+    printf '\n%d check(s) failed\n' "$failures" >&2
+    exit 1
+fi
+
+echo
+echo "all checks passed"
