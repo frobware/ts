@@ -86,6 +86,10 @@ expect "-r -i formats as plain -r" \
     "$(echo "$dated" | TZ=Europe/London "$TS" -r '%F %T')" \
     "$(echo "$dated" | TZ=Europe/London "$TS" -r -i '%F %T')"
 
+expect "-r -i -s is still just -r" \
+    "$(echo "$dated" | "$TS" -r)" \
+    "$(echo "$dated" | "$TS" -r -i -s)"
+
 expect "-r -s is relative, not an elapsed delta" \
     "$(echo "$dated" | "$TS" -r)" \
     "$(echo "$dated" | "$TS" -r -s)"

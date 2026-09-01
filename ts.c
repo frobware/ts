@@ -708,6 +708,20 @@ static bool init_clocks(const struct ts_opt *const ts, long *last_seconds, long 
 	return true;
 }
 
+// resolve_modes - Reconcile the mutually exclusive mode flags in OPT.
+//
+// -r converts timestamps already present in the input, which needs
+// the wall clock. -i and -s replace the wall clock with an elapsed
+// delta. Both cannot apply at once, and -r wins: moreutils ignores
+// -i and -s on its relative path, so we do too.
+static void resolve_modes(struct ts_opt *opt)
+{
+	if (opt->flag_rel) {
+		opt->flag_inc = false;
+		opt->flag_sincestart = false;
+	}
+}
+
 static struct ts_opt parse_options(int argc, char *argv[])
 {
 	struct ts_opt option = { 0 };
@@ -750,6 +764,10 @@ static struct ts_opt parse_options(int argc, char *argv[])
 			exit(EXIT_FAILURE);
 		}
 	}
+
+	// Resolve before the conflict check below: under -r the
+	// incremental flags are ignored, so they cannot conflict.
+	resolve_modes(&option);
 
 	if (option.flag_inc && option.flag_sincestart) {
 		fprintf(stderr, "Options '-i' and '-s' cannot be used together.\n");
@@ -1000,6 +1018,40 @@ static void test_precision_variations(void)
 	COMP_TIME_ASSERT(comp_time, 0, 0, 12, 30, 0);
 }
 
+static void test_mode_resolution(void)
+{
+	struct ts_opt opt;
+
+	// -r supersedes the incremental flags.
+	opt = (struct ts_opt){ .flag_rel = true, .flag_inc = true };
+	resolve_modes(&opt);
+	assert(opt.flag_rel && !opt.flag_inc && !opt.flag_sincestart);
+
+	opt = (struct ts_opt){ .flag_rel = true, .flag_sincestart = true };
+	resolve_modes(&opt);
+	assert(opt.flag_rel && !opt.flag_inc && !opt.flag_sincestart);
+
+	// Both at once are discarded too, so they never reach the
+	// check that rejects them as a contradictory pair.
+	opt = (struct ts_opt){ .flag_rel = true, .flag_inc = true, .flag_sincestart = true };
+	resolve_modes(&opt);
+	assert(opt.flag_rel && !opt.flag_inc && !opt.flag_sincestart);
+
+	// Without -r the incremental flags survive untouched.
+	opt = (struct ts_opt){ .flag_inc = true };
+	resolve_modes(&opt);
+	assert(!opt.flag_rel && opt.flag_inc && !opt.flag_sincestart);
+
+	opt = (struct ts_opt){ .flag_sincestart = true };
+	resolve_modes(&opt);
+	assert(!opt.flag_rel && !opt.flag_inc && opt.flag_sincestart);
+
+	// -m selects the clock rather than the mode, so it survives.
+	opt = (struct ts_opt){ .flag_rel = true, .flag_inc = true, .flag_mono = true };
+	resolve_modes(&opt);
+	assert(opt.flag_mono);
+}
+
 static volatile sig_atomic_t signal_received;
 
 static void signal_handler(int sig)
@@ -1010,6 +1062,7 @@ static void signal_handler(int sig)
 int main(int argc, char *argv[])
 {
 	test_precision_variations();
+	test_mode_resolution();
 
 	struct sigaction sa_sigint;
 	sa_sigint.sa_handler = signal_handler;
