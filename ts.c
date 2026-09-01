@@ -722,6 +722,29 @@ static void resolve_modes(struct ts_opt *opt)
 	}
 }
 
+// resolve_format - Return the strftime format OPT should use.
+// USER_FORMAT is the format given on the command line, or NULL when
+// none was. Call after resolve_modes.
+static const char *resolve_format(const struct ts_opt *opt, const char *user_format)
+{
+	if (user_format != NULL) {
+		return user_format;
+	}
+
+	if (opt->flag_inc || opt->flag_sincestart) {
+		return "%H:%M:%S";
+	}
+
+	/*
+	 * %b = Abbreviated month name
+	 * %d = The day of the month as a decimal number
+	 * %H = Hours
+	 * %M = Minutes
+	 * %S = Seconds
+	 */
+	return "%b %d %H:%M:%S";
+}
+
 static struct ts_opt parse_options(int argc, char *argv[])
 {
 	struct ts_opt option = { 0 };
@@ -774,33 +797,19 @@ static struct ts_opt parse_options(int argc, char *argv[])
 		exit(EXIT_FAILURE);
 	}
 
-	/*
-	 * %b = Abbreviated month name
-	 * %d = The day of the month as a decimal number
-	 * %H = Hours
-	 * % %M = Minutes
-	 * % %S = Seconds
-	 */
-	const char *final_format = "%b %d %H:%M:%S";
+	const char *user_format = optind < argc ? argv[optind] : NULL;
 
-	if (optind < argc) {
-		final_format = argv[optind];
-	}
+	option.format = resolve_format(&option, user_format);
+	option.user_format_specified = user_format != NULL;
+	option.hires_timestamping = count_microsecond_specifiers(option.format) > 0 || option.flag_mono;
 
 	if (option.flag_inc || option.flag_sincestart) {
-		// This is a departure from the moreutils version of
-		// ts. If we have a user-supplied format, then use
-		// that in preference to %H:%M:%S.
-		if (optind == argc) {
-			final_format = "%H:%M:%S";
-		}
+		// An elapsed time is rendered with strftime, so
+		// anything but a zero offset would be added to the
+		// duration.
 		setenv("TZ", "GMT", 1);
 		tzset();
 	}
-
-	option.format = final_format;
-	option.hires_timestamping = count_microsecond_specifiers(option.format) > 0 || option.flag_mono;
-	option.user_format_specified = optind < argc;
 
 	return option;
 }
@@ -1052,6 +1061,30 @@ static void test_mode_resolution(void)
 	assert(opt.flag_mono);
 }
 
+static void test_format_resolution(void)
+{
+	const struct ts_opt absolute = { 0 };
+	const struct ts_opt relative = { .flag_rel = true };
+	const struct ts_opt incremental = { .flag_inc = true };
+	const struct ts_opt sincestart = { .flag_sincestart = true };
+
+	// Absolute and relative timestamps share the default format.
+	// A relative run has had its incremental flags cleared by
+	// resolve_modes, so -r -s formats as plain -r does.
+	assert(strcmp(resolve_format(&absolute, NULL), "%b %d %H:%M:%S") == 0);
+	assert(strcmp(resolve_format(&relative, NULL), "%b %d %H:%M:%S") == 0);
+
+	// Elapsed times default to a bare clock.
+	assert(strcmp(resolve_format(&incremental, NULL), "%H:%M:%S") == 0);
+	assert(strcmp(resolve_format(&sincestart, NULL), "%H:%M:%S") == 0);
+
+	// A format on the command line wins in every mode.
+	assert(strcmp(resolve_format(&absolute, "%F"), "%F") == 0);
+	assert(strcmp(resolve_format(&relative, "%F"), "%F") == 0);
+	assert(strcmp(resolve_format(&incremental, "%F"), "%F") == 0);
+	assert(strcmp(resolve_format(&sincestart, "%F"), "%F") == 0);
+}
+
 static volatile sig_atomic_t signal_received;
 
 static void signal_handler(int sig)
@@ -1063,6 +1096,7 @@ int main(int argc, char *argv[])
 {
 	test_precision_variations();
 	test_mode_resolution();
+	test_format_resolution();
 
 	struct sigaction sa_sigint;
 	sa_sigint.sa_handler = signal_handler;
