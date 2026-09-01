@@ -43,7 +43,7 @@
 # accommodate the specifics of macOS's clang output.
 
 CC_IMPLICIT_INCLUDE_PATHS := $(shell $(CC) -v -E -x c /dev/null 2>&1 \
-	| sed -n '/#include <...> search starts here:/,/End of search list./{//!p}' \
+	| sed -n '/\#include <...> search starts here:/,/End of search list./{//!p}' \
 	| sed '/(framework directory)/d')
 
 CC_IMPLICIT_INCLUDES := $(patsubst %,-I%,$(CC_IMPLICIT_INCLUDE_PATHS))
