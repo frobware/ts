@@ -64,7 +64,10 @@ resolution using the specifiers `%.S`, `%.s`, or `%.T`.
 
 The `TZ` environment variable is respected, influencing the timezone
 used for timestamps when not explicitly included in the timestamp's
-format. The exception is `-i` and `-s`, which report an elapsed time
+format. Under `-r`, a timestamp that carries its own zone (a trailing
+`Z`, or an offset such as `+0200`) names a single instant, so its age
+is the same wherever you read it, and a custom format renders it in
+your zone. A timestamp without a zone is read as local time. The exception is `-i` and `-s`, which report an elapsed time
 rather than a point in time: their output is formatted in GMT and `TZ`
 is ignored, because otherwise the zone offset would be added to the
 duration.

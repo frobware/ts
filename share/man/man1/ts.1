@@ -86,7 +86,16 @@ default precision level is 2.
 The standard
 .B TZ
 environment variable controls what time zone dates are assumed to be
-in if a timezone is not specified as part of the date.
+in if a timezone is not specified as part of the date. A timestamp
+that does specify one, whether a trailing
+.B Z
+or a numeric offset, names a single instant: under
+.B \-r
+its age does not depend on
+.BR TZ ,
+and a custom format renders it in the zone
+.B TZ
+selects.
 .PP
 .B \-i
 and
