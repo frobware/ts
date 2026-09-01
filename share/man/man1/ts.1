@@ -42,7 +42,10 @@ absolute ones. The default format changes to "%H:%M:%S", and "%.S" and
 every timestamp will be the time elapsed since the last timestamp.
 With
 .B \-s,
-the time elapsed since the start of the program is used.
+the time elapsed since the start of the program is used. Both are
+ignored if
+.B \-r
+is also given.
 
 The
 .B \-m
@@ -51,7 +54,11 @@ switch makes the system's monotonic clock be used.
 .SH OPTIONS
 .TP
 .B \-r
-Convert existing timestamps in the input to relative times.
+Convert existing timestamps in the input to relative times. Takes
+precedence over
+.B \-i
+and
+.B \-s.
 
 .TP
 .B \-i
@@ -80,6 +87,14 @@ The standard
 .B TZ
 environment variable controls what time zone dates are assumed to be
 in if a timezone is not specified as part of the date.
+.PP
+.B \-i
+and
+.B \-s
+report an elapsed time rather than a point in time, so their output is
+formatted in GMT and
+.B TZ
+is ignored; otherwise the zone offset would be added to the duration.
 
 .SH NOTES
 The

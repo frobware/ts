@@ -39,7 +39,8 @@ resolution using the specifiers `%.S`, `%.s`, or `%.T`.
   existing timestamps within the input into relative times (e.g.,
   "15m5s ago"), automatically detecting and supporting many common
   timestamp formats. If a custom output format is also specified with
-  `-r`, `ts` will use it for the time conversion.
+  `-r`, `ts` will use it for the time conversion. `-r` takes
+  precedence over `-i` and `-s`, which are ignored when it is given.
 
 - **Incremental Timestamps**: The `-i` and `-s` flags alter the
   utility's behaviour to report timestamps incrementally:
@@ -63,7 +64,10 @@ resolution using the specifiers `%.S`, `%.s`, or `%.T`.
 
 The `TZ` environment variable is respected, influencing the timezone
 used for timestamps when not explicitly included in the timestamp's
-format.
+format. The exception is `-i` and `-s`, which report an elapsed time
+rather than a point in time: their output is formatted in GMT and `TZ`
+is ignored, because otherwise the zone offset would be added to the
+duration.
 
 ### Examples
 
