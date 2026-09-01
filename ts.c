@@ -108,10 +108,19 @@ struct ts_opt {
 	int flag_precision;
 };
 
+// Which zone, if any, the matched text carries. ZONE_LOCAL is zero so
+// that a pattern without a zone needs no annotation.
+enum timestamp_zone {
+	ZONE_LOCAL,
+	ZONE_UTC,
+	ZONE_NUMERIC,
+};
+
 struct timestamp_pattern {
 	const char *const re;
 	const char *const description;
 	const char *strptime_format;
+	enum timestamp_zone zone;
 	pcre2_code *pcre;
 	pcre2_match_data *match_data;
 };
@@ -119,9 +128,10 @@ struct timestamp_pattern {
 typedef time_t composite_time[TIME_UNIT_COUNT];
 
 static struct timestamp_pattern timestamps[] = {{
-		.re = "\\d{4}-\\d{2}-\\d{2}T\\d{2}:\\d{2}:\\d{2}\\.\\d{9}Z",
-		.description = "Kubernetes pod log entry with timestamp",
+		.re = "\\d{4}-\\d{2}-\\d{2}T\\d{2}:\\d{2}:\\d{2}(?:\\.\\d+)?Z",
+		.description = "ISO-8601 with a Z suffix, as Kubernetes pod logs use",
 		.strptime_format = "%Y-%m-%dT%H:%M:%S",
+		.zone = ZONE_UTC,
 	}, {
 		.re = "\\d{2}\\d{2} \\d{2}:\\d{2}:\\d{2}\\.\\d{6}",
 		.description = "Kubernetes client-go log format with microseconds",
@@ -129,15 +139,18 @@ static struct timestamp_pattern timestamps[] = {{
 	}, {
 		.re = "\\d+\\s+\\w\\w\\w\\s+\\d\\d+\\s+\\d\\d:\\d\\d:\\d\\d\\s+[+-]\\d\\d\\d\\d",
 		.description = "16 Jun 94 07:29:35 with timezone",
-		.strptime_format = "%d %b %y %H:%M:%S %z",
+		.strptime_format = "%d %b %y %H:%M:%S",
+		.zone = ZONE_NUMERIC,
 	}, {
 		.re = "\\d\\d[-\\s\\/]\\w\\w\\w\\/\\d\\d+\\s+\\d\\d:\\d\\d:\\d\\d\\s+[+-]\\d\\d\\d\\d",
 		.description = "21 dec/93 17:05:30 +0000",
-		.strptime_format = "%d %b/%y %H:%M:%S %z",
+		.strptime_format = "%d %b/%y %H:%M:%S",
+		.zone = ZONE_NUMERIC,
 	}, {
 		.re = "\\d\\d[-\\s\\/]\\w\\w\\w\\s+\\d\\d:\\d\\d:\\d\\d\\s+[+-]\\d\\d\\d\\d",
 		.description = "21 dec 17:05:30 +0000",
-		.strptime_format = "%d %b %H:%M:%S %z",
+		.strptime_format = "%d %b %H:%M:%S",
+		.zone = ZONE_NUMERIC,
 	}, {
 		.re = "\\d\\d[-\\s\\/]\\w\\w\\w\\/\\d\\d+\\s+\\d\\d:\\d\\d",
 		.description = "21 dec/93 17:05 without seconds and timezone",
@@ -147,7 +160,7 @@ static struct timestamp_pattern timestamps[] = {{
 		.description = "21 dec 17:05 without seconds and timezone",
 		.strptime_format = "%d %b %H:%M",
 	}, {
-		.re = "\\d\\d\\d\\d[-:]\\d\\d[-:]\\d\\dT\\d\\d:\\d\\d:\\d\\d",
+		.re = "\\d\\d\\d\\d[-:]\\d\\d[-:]\\d\\dT\\d\\d:\\d\\d:\\d\\d(?:\\.\\d+)?",
 		.description = "ISO-8601 format",
 		.strptime_format = "%Y-%m-%dT%H:%M:%S",
 	}, {
@@ -464,10 +477,67 @@ static void format_comp_time(char *buf, const composite_time comp_time, const ch
 	buf[offset] = '\0';
 }
 
-static bool match_timestamp(char *subject, ssize_t len, size_t *match_start, size_t *match_end, const char **strptime_fmt)
+// days_from_civil - Days since 1970-01-01 for a proleptic Gregorian
+// date. Howard Hinnant's algorithm, valid across the whole time_t
+// range rather than just the epoch onwards.
+static time_t days_from_civil(int year, int month, int day)
+{
+	year -= month <= 2;
+
+	const int era = (year >= 0 ? year : year - 399) / 400;
+	const unsigned yoe = (unsigned)(year - era * 400);
+	const unsigned doy = (153 * (unsigned)(month + (month > 2 ? -3 : 9)) + 2) / 5 + (unsigned)day - 1;
+	const unsigned doe = yoe * 365 + yoe / 4 - yoe / 100 + doy;
+
+	return (time_t)era * 146097 + (time_t)doe - 719468;
+}
+
+// tm_to_utc_seconds - Read TM as a civil time in UTC and return the
+// seconds since the epoch. Unlike mktime this consults neither TZ nor
+// tm_isdst nor tm_gmtoff, so every platform agrees on the answer.
+static time_t tm_to_utc_seconds(const struct tm *tm)
+{
+	const time_t days = days_from_civil(tm->tm_year + 1900, tm->tm_mon + 1, tm->tm_mday);
+
+	return days * SECONDS_PER_DAY
+		+ tm->tm_hour * SECONDS_PER_HOUR
+		+ tm->tm_min * SECONDS_PER_MINUTE
+		+ tm->tm_sec;
+}
+
+// parse_utc_offset - Read the +hhmm or -hhmm suffix that the
+// numeric-zone patterns end with, returning seconds east of UTC.
+// strptime cannot be trusted for this: glibc records the offset in
+// tm_gmtoff and leaves the fields alone, whereas BSD rewrites the
+// fields into the local zone and reports the local offset instead.
+static long parse_utc_offset(const char *text, size_t len)
+{
+	if (len < 5) {
+		return 0;
+	}
+
+	const char *sign = text + len - 5;
+
+	if (*sign != '+' && *sign != '-') {
+		return 0;
+	}
+
+	for (size_t i = 1; i < 5; i++) {
+		if (sign[i] < '0' || sign[i] > '9') {
+			return 0;
+		}
+	}
+
+	const long hours = (sign[1] - '0') * 10 + (sign[2] - '0');
+	const long minutes = (sign[3] - '0') * 10 + (sign[4] - '0');
+	const long offset = hours * SECONDS_PER_HOUR + minutes * SECONDS_PER_MINUTE;
+
+	return *sign == '-' ? -offset : offset;
+}
+
+static const struct timestamp_pattern *match_timestamp(char *subject, ssize_t len, size_t *match_start, size_t *match_end)
 {
 	*match_start = *match_end = 0;
-	*strptime_fmt = NULL;
 
 	for (size_t i = 0; i < NELEMENTS(timestamps); i++) {
                 if (pcre2_match(timestamps[i].pcre, (PCRE2_SPTR)subject, len, 0, 0, timestamps[i].match_data, NULL) < 0)
@@ -476,11 +546,34 @@ static bool match_timestamp(char *subject, ssize_t len, size_t *match_start, siz
 		assert(ovector);
 		*match_start = ovector[0];
 		*match_end = ovector[1];
-		*strptime_fmt = timestamps[i].strptime_format;
-		return true;
+		return &timestamps[i];
 	}
 
-	return false;
+	return NULL;
+}
+
+// timestamp_to_epoch - Convert PARSED, the fields strptime read out of
+// TEXT, into seconds since the epoch, honouring whichever zone PATTERN
+// says the text carries. Only a zone-less timestamp goes through
+// mktime, and only that case depends on TZ.
+static time_t timestamp_to_epoch(const struct timestamp_pattern *pattern,
+				 struct tm *parsed,
+				 const char *text,
+				 size_t len)
+{
+	switch (pattern->zone) {
+	case ZONE_UTC:
+		return tm_to_utc_seconds(parsed);
+	case ZONE_NUMERIC:
+		return tm_to_utc_seconds(parsed) - parse_utc_offset(text, len);
+	case ZONE_LOCAL:
+		break;
+	}
+
+	// Let mktime() determine DST.
+	parsed->tm_isdst = -1;
+
+	return mktime(parsed);
 }
 
 // Calculates a timestamp based on various modes and flags. This
@@ -558,12 +651,13 @@ static bool gettime(const struct ts_opt *const ts, struct timespec *now, long *l
 static void fmt_time_rel(struct ts_fmt *fmt, char *line, ssize_t line_len, size_t *match_end, struct timespec now)
 {
 	size_t match_start;
-	const char *strptime_fmt = NULL;
 
 	*match_end = 0;
 	fmt->buf[0] = '\0';
 
-	if (!match_timestamp(line, line_len, &match_start, match_end, &strptime_fmt)) {
+	const struct timestamp_pattern *pattern = match_timestamp(line, line_len, &match_start, match_end);
+
+	if (pattern == NULL) {
 		return;
 	}
 
@@ -578,7 +672,7 @@ static void fmt_time_rel(struct ts_fmt *fmt, char *line, ssize_t line_len, size_
 	// the input string.
 	struct tm parsed_tm = { 0 };
 
-	if (strptime(&line[match_start], strptime_fmt, &parsed_tm) == NULL) {
+	if (strptime(&line[match_start], pattern->strptime_format, &parsed_tm) == NULL) {
 		line[*match_end] = old_char;
 		return;
 	}
@@ -599,19 +693,20 @@ static void fmt_time_rel(struct ts_fmt *fmt, char *line, ssize_t line_len, size_
 	// year information), might erroneously be interpreted as
 	// being in the future.
 
-	// Let mktime() determine DST.
-	parsed_tm.tm_isdst = -1;
+	const char *matched = &line[match_start];
+	const size_t matched_len = *match_end - match_start;
 
-	time_t parsed_time_t = mktime(&parsed_tm);
+	time_t parsed_time_t = timestamp_to_epoch(pattern, &parsed_tm, matched, matched_len);
 	if (parsed_time_t > now.tv_sec) {
 		parsed_tm.tm_year--;
-		// Let mktime() determine DST.
-		parsed_tm.tm_isdst = -1;
-		parsed_time_t = mktime(&parsed_tm);
+		parsed_time_t = timestamp_to_epoch(pattern, &parsed_tm, matched, matched_len);
 	}
 
 	if (fmt->opt->user_format_specified) {
-		strftime(fmt->buf, fmt->bufsz, fmt->sanitised_time_format, &parsed_tm);
+		// Render the instant in the local zone rather than
+		// echoing back the fields as written, so that TZ
+		// governs the output whatever zone the input carried.
+		strftime(fmt->buf, fmt->bufsz, fmt->sanitised_time_format, localtime(&parsed_time_t));
 	} else {
 		time_t seconds_diff = difftime(now.tv_sec, parsed_time_t);
 
@@ -1085,6 +1180,56 @@ static void test_format_resolution(void)
 	assert(strcmp(resolve_format(&sincestart, "%F"), "%F") == 0);
 }
 
+static void test_utc_conversion(void)
+{
+	struct tm tm;
+
+	// Epoch, and dates either side of it.
+	assert(days_from_civil(1970, 1, 1) == 0);
+	assert(days_from_civil(1970, 1, 2) == 1);
+	assert(days_from_civil(1969, 12, 31) == -1);
+
+	// Century and leap rules: 2000 was a leap year, 1900 was not.
+	assert(days_from_civil(2000, 3, 1) - days_from_civil(2000, 2, 28) == 2);
+	assert(days_from_civil(1900, 3, 1) - days_from_civil(1900, 2, 28) == 1);
+
+	memset(&tm, 0, sizeof tm);
+	tm.tm_year = 1970 - 1900; tm.tm_mon = 0; tm.tm_mday = 1;
+	assert(tm_to_utc_seconds(&tm) == 0);
+
+	// 1994-06-16T07:29:35Z.
+	memset(&tm, 0, sizeof tm);
+	tm.tm_year = 1994 - 1900; tm.tm_mon = 5; tm.tm_mday = 16;
+	tm.tm_hour = 7; tm.tm_min = 29; tm.tm_sec = 35;
+	assert(tm_to_utc_seconds(&tm) == 771751775);
+
+	// The 32-bit time_t rollover, 2038-01-19T03:14:07Z.
+	memset(&tm, 0, sizeof tm);
+	tm.tm_year = 2038 - 1900; tm.tm_mon = 0; tm.tm_mday = 19;
+	tm.tm_hour = 3; tm.tm_min = 14; tm.tm_sec = 7;
+	assert(tm_to_utc_seconds(&tm) == 2147483647);
+
+	// A date before the epoch must go negative rather than wrap.
+	memset(&tm, 0, sizeof tm);
+	tm.tm_year = 1969 - 1900; tm.tm_mon = 11; tm.tm_mday = 31;
+	tm.tm_hour = 23; tm.tm_min = 59; tm.tm_sec = 59;
+	assert(tm_to_utc_seconds(&tm) == -1);
+
+	// Offsets are read from the tail of the matched text.
+	const char *zulu = "16 Jun 94 07:29:35 +0000";
+	assert(parse_utc_offset(zulu, strlen(zulu)) == 0);
+
+	const char *india = "16 Jun 94 07:29:35 +0530";
+	assert(parse_utc_offset(india, strlen(india)) == 5 * 3600 + 30 * 60);
+
+	const char *pacific = "16 Jun 94 07:29:35 -0800";
+	assert(parse_utc_offset(pacific, strlen(pacific)) == -8 * 3600);
+
+	// Text without an offset contributes nothing.
+	const char *bare = "16 Jun 94 07:29:35";
+	assert(parse_utc_offset(bare, strlen(bare)) == 0);
+}
+
 static volatile sig_atomic_t signal_received;
 
 static void signal_handler(int sig)
@@ -1097,6 +1242,7 @@ int main(int argc, char *argv[])
 	test_precision_variations();
 	test_mode_resolution();
 	test_format_resolution();
+	test_utc_conversion();
 
 	struct sigaction sa_sigint;
 	sa_sigint.sa_handler = signal_handler;
