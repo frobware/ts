@@ -67,24 +67,24 @@ for tz in UTC Europe/London Asia/Tokyo; do
         "$(echo line | TZ=$tz "$TS" -s)"
 done
 
-# -r converts timestamps found in the input, which are points in
-# time, so TZ does apply.
-expect "-r honours TZ=UTC" \
+expect "-r reformats a timestamp to an explicit format" \
     "1994-06-16 07:29:35 event" \
     "$(echo "$dated" | TZ=UTC "$TS" -r '%F %T')"
 
-expect "-r honours TZ=Europe/London" \
-    "1994-06-16 08:29:35 event" \
-    "$(echo "$dated" | TZ=Europe/London "$TS" -r '%F %T')"
+# -r supersedes -i and -s rather than being corrupted by them. What
+# strftime prints is the struct strptime filled, and how an explicit
+# +0000 offset survives mktime differs between libcs -- glibc leaves
+# the fields alone where BSD shifts them into the local zone -- so
+# assert that -i and -s change nothing, not a literal time.
+for tz in UTC Europe/London Asia/Tokyo; do
+    expect "-r -s matches -r under TZ=$tz" \
+        "$(echo "$dated" | TZ=$tz "$TS" -r '%F %T')" \
+        "$(echo "$dated" | TZ=$tz "$TS" -r -s '%F %T')"
 
-# -r supersedes -i and -s rather than being corrupted by them.
-expect "-r -s formats as plain -r" \
-    "$(echo "$dated" | TZ=Europe/London "$TS" -r '%F %T')" \
-    "$(echo "$dated" | TZ=Europe/London "$TS" -r -s '%F %T')"
-
-expect "-r -i formats as plain -r" \
-    "$(echo "$dated" | TZ=Europe/London "$TS" -r '%F %T')" \
-    "$(echo "$dated" | TZ=Europe/London "$TS" -r -i '%F %T')"
+    expect "-r -i matches -r under TZ=$tz" \
+        "$(echo "$dated" | TZ=$tz "$TS" -r '%F %T')" \
+        "$(echo "$dated" | TZ=$tz "$TS" -r -i '%F %T')"
+done
 
 expect "-r -i -s is still just -r" \
     "$(echo "$dated" | "$TS" -r)" \
